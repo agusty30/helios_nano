@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>circle-agent buyer</title>
+    <title>helios_nano buyer</title>
     <style>
       :root {
         --fg: #111;
@@ -94,8 +94,15 @@
     </style>
   </head>
   <body>
-    <h1>circle-agent buyer</h1>
-    <p>Buyer-side demo for <code>/hello-world</code> paywall, paid via Circle Gateway nanopayments on Arc Testnet. Sign with MetaMask, watch the full settlement trace.</p>
+    <h1>helios_nano buyer</h1>
+    <p>Buyer-side demo for the <code>/nano</code> ($0.000001) and
+    <code>/hello-world</code> ($0.01) paywalls, paid via Circle Gateway
+    nanopayments on Arc Testnet. Sign with MetaMask, watch the full settlement
+    trace.</p>
+    <p class="muted">Live demo:
+    <a href="https://heliosnano-pay.up.railway.app" target="_blank" rel="noreferrer">heliosnano-pay.up.railway.app</a>
+    · autonomous agent + source:
+    <a href="https://github.com/agusty30/helios_nano" target="_blank" rel="noreferrer">github.com/agusty30/helios_nano</a></p>
 
     <h2>1. Live demo</h2>
     <div class="row">
@@ -104,6 +111,7 @@
     </div>
 
     <div class="row">
+      <button id="payNano" disabled>Pay $0.000001 and call /nano</button>
       <button id="pay" disabled>Pay $0.01 and call /hello-world</button>
       <span id="status" class="muted"></span>
     </div>
@@ -138,6 +146,7 @@
 
       const addrEl = document.getElementById("addr");
       const payBtn = document.getElementById("pay");
+      const payNanoBtn = document.getElementById("payNano");
       const statusEl = document.getElementById("status");
       const outEl = document.getElementById("out");
       const traceEl = document.getElementById("trace");
@@ -210,6 +219,7 @@
         addrEl.classList.remove("muted");
         await ensureArcTestnet();
         payBtn.disabled = false;
+        payNanoBtn.disabled = false;
         setStatus("ready", "ok");
       };
 
@@ -226,11 +236,11 @@
         return decodeURIComponent(escape(atob(s)));
       }
 
-      document.getElementById("pay").onclick = async () => {
+      async function payFor(endpoint) {
         outEl.textContent = "—";
         try {
           setStatus("fetching 402 challenge…");
-          const r1 = await fetch("/hello-world");
+          const r1 = await fetch(endpoint);
           if (r1.status !== 402) {
             setStatus(`unexpected ${r1.status}`, "err");
             outEl.textContent = await r1.text();
@@ -294,7 +304,7 @@
           };
 
           setStatus("settling via facilitator…");
-          const r2 = await fetch("/hello-world", {
+          const r2 = await fetch(endpoint, {
             headers: { "payment-signature": b64encode(paymentPayload) },
           });
           const body = await r2.json().catch(async () => await r2.text());
@@ -314,7 +324,10 @@
           setStatus("error", "err");
           outEl.textContent = String(e?.message ?? e);
         }
-      };
+      }
+
+      payBtn.onclick = () => payFor("/hello-world");
+      payNanoBtn.onclick = () => payFor("/nano");
 
       lookupBtn.onclick = () => renderTrace(lookupInput.value.trim());
 
@@ -411,7 +424,8 @@
             <h3>On-chain <code>submitBatch</code> tx</h3>
             <p>${getLink(batchInfo.explorerUrl, batchInfo.batchTx)}</p>
             ${decoded ? renderDecoded(decoded, buyer) : `<p class="muted">decoding…</p>`}
-            <details><summary>CLI: decode this batch locally</summary><pre>cd ~/Desktop/desktop/aws_scripts/circle-agent
+            <details><summary>CLI: decode this batch locally</summary><pre>git clone https://github.com/agusty30/helios_nano && cd helios_nano
+npm install
 npx tsx decode-batch.ts ${batchInfo.batchTx}</pre></details>
           </div>` : `
           <div class="step" data-step="5">
