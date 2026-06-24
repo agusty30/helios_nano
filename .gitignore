@@ -4,3 +4,5 @@ node_modules/
 *.log
 .DS_Store
 .venv/
+agent/.agent-key
+agent/ledger.jsonl

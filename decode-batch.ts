@@ -7,8 +7,16 @@ import {
   getAddress,
   type Hex,
 } from "viem";
+import { installDohResolver } from "./agent/net.ts";
 
-const RPC = process.env.ARC_TESTNET_RPC ?? "https://rpc.testnet.arc.network";
+// Settlement-UUID lookups hit gateway-api-testnet.circle.com; resolve via DoH
+// in case the local network hijacks *.circle.com DNS.
+installDohResolver();
+
+
+const RPC =
+  process.env.ARC_TESTNET_RPC ??
+  "https://rpc.testnet.arc-node.thecanteenapp.com/v1/swrm_3aa8a9334770e6eddb5cc05f2e3dbfe555eca270d4eb78fbb4b6056a4a04e2b0";
 const GATEWAY_API =
   process.env.GATEWAY_API ?? "https://gateway-api-testnet.circle.com";
 const SETTLEMENT_WINDOW_MS = 10_000;

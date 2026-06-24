@@ -1,0 +1,52 @@
+# helios_nano — local + hosted runtime
+#
+# Quick start (local):
+#   docker compose up server                          # paywall live on :3000
+#   docker compose run --rm agent doctor              # readiness check
+#   docker compose run --rm agent pay http://server:3000/nano
+#   docker compose run --rm --entrypoint npm agent run agent:smoke
+#
+# Config: copy .env.example to .env and fill in PRIVATE_KEY etc. Any AGENT_*
+# var left unset falls back to the defaults baked into agent/config.ts.
+
+services:
+  # The x402 paywall server: serves /hello-world ($0.01) and /nano ($0.000001).
+  server:
+    build: .
+    image: helios_nano
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      # Pass-throughs (only applied when set in .env / shell):
+      - ARC_TESTNET_RPC
+      - AGENT_DOH
+    volumes:
+      - agent-data:/data
+    restart: unless-stopped
+
+  # The autonomous agent CLI. Not started by default (tools profile); invoke
+  # on demand with `docker compose run --rm agent <command>`.
+  agent:
+    build: .
+    image: helios_nano
+    profiles: ["tools"]
+    depends_on:
+      - server
+    entrypoint: ["npm", "run", "agent", "--"]
+    environment:
+      - ARC_TESTNET_RPC
+      - AGENT_DOH
+      - PRIVATE_KEY
+      - AGENT_MAX_PER_PAYMENT
+      - AGENT_MAX_PER_HOUR
+      - AGENT_MAX_PER_DAY
+      - AGENT_ALLOWED_HOSTS
+      - AGENT_BLOCKED_HOSTS
+    volumes:
+      - agent-data:/data
+
+volumes:
+  # Persists the agent's wallet key (/data/.agent-key) and audit ledger across
+  # runs, kept out of the image and out of git.
+  agent-data:

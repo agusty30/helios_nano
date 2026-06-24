@@ -6,7 +6,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "tsx server.ts",
-    "buyer": "tsx buyer.ts"
+    "buyer": "tsx buyer.ts",
+    "agent": "tsx agent/cli.ts",
+    "agent:typecheck": "tsc -p tsconfig.agent.json",
+    "agent:smoke": "tsx agent/smoke.ts"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +22,7 @@
     "express": "^5.2.1",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
+    "undici": "^8.5.0",
     "viem": "^2.48.11"
   },
   "devDependencies": {

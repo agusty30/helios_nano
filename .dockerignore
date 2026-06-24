@@ -1,0 +1,11 @@
+node_modules
+.git
+.gitignore
+*.log
+.DS_Store
+.venv
+agent/.agent-key
+agent/ledger.jsonl
+.env
+.env.*
+tsconfig.agent.json

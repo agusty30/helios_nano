@@ -1,4 +1,9 @@
+import { installDohResolver } from "./agent/net.ts";
 import { GatewayClient } from "@circle-fin/x402-batching/client";
+
+// Bypass ISP DNS hijacking of *.circle.com (resolve the facilitator via DoH).
+installDohResolver();
+
 
 const pk = process.env.PRIVATE_KEY;
 if (!pk) {

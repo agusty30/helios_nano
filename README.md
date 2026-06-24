@@ -1,126 +1,229 @@
-# circle-agent
+# helios_nano
 
-An **explainer companion** to Circle's <a href="https://github.com/circlefin/arc-nanopayments">arc-nanopayments</a>. Where the upstream demo shows what a production-shaped x402 app looks like (full Next.js seller dashboard, Supabase persistence, LangChain buyer agent), this repo zooms in on the single question *"what actually happens when an x402 payment settles?"*.
+**An autonomous AI agent that discovers and pays for x402 services on its own** —
+with its own wallet, Circle Gateway nanopayments down to **$0.000001**, gas-free
+batched settlement in **<500ms**, cross-chain USDC, and built-in compliance
+guardrails. Targets **Arc Testnet**, where USDC is the native gas token.
 
-It does that by pairing a deliberately small paywalled server (`server.ts`) with two pieces you won't find in the upstream demo:
+It ships as one repo with three parts:
 
-- **`decode-batch.ts`** — pulls a Gateway `submitBatch(...)` transaction off Arc Testnet and decodes its calldata into per-buyer balance deltas, net transfers, and (via a heuristic against Circle's facilitator API) the off-chain settlement UUIDs that landed in the batch.
-- **`public/buyer.html`** — a step-by-step **payment trace UI**: buyer signs EIP-712 → facilitator settles → settlement queued → relayer batches → on-chain `submitBatch` tx → settlement marked completed. Every step links to the underlying API call or explorer page so you can follow the lifecycle by hand.
+1. **The agent** (`agent/`) — the headline. Generates its own wallet, probes
+   URLs / the Circle marketplace for x402 paywalls, vets every payment against
+   spend caps + allow/block lists, settles via Circle Gateway, and writes an
+   append-only audit ledger. Has a `doctor` readiness check and a one-command
+   end-to-end smoke test.
+2. **A paywall server** (`server.ts`) — a tiny x402 seller exposing
+   `/hello-world` ($0.01) and `/nano` ($0.000001) so the agent has a real,
+   traceable target.
+3. **A payment-trace explainer** (`decode-batch.ts`, `public/buyer.html`) —
+   unpacks the on-chain Gateway `submitBatch` tx and renders the full settlement
+   lifecycle step by step.
 
-The `/hello-world` paywall is just enough surface area to generate a real settlement you can trace through both tools.
+---
 
-## Prerequisites
+## Why it matters
 
-- Node.js 20+
-- An Arc Testnet wallet funded with testnet USDC (MetaMask for the browser buyer, or a raw private key for the CLI buyer). Get testnet USDC from the [Circle faucet](https://faucet.circle.com/).
+x402 + stablecoin micropayments let an agent pay per API call in USDC with **no
+API keys, no signup, no prefunded billing**. helios_nano turns that into an
+autonomous loop: *search for a capability → check the price → pay if it's within
+policy → use the result*, all without a human in the loop and all auditable
+after the fact.
 
-## Installation
+| Capability | How |
+|---|---|
+| **Own wallet** | secp256k1 key generated + persisted on first run (`viem`) |
+| **Service discovery** | `probe(url)` decodes 402 challenges; `circle services search` for the marketplace |
+| **Nanopayments** | down to `$0.000001` (1 USDC atomic unit) |
+| **Gas-free + batched** | Circle Gateway: sign EIP-712 off-chain → facilitator settles → relayer batches the on-chain tx |
+| **<500ms settlement** | Gateway returns a settlement UUID near-instantly; on-chain batch follows |
+| **Cross-chain** | one `GatewayClient` per funded chain, unified balance, instant rebalancing |
+| **Compliance guardrails** | per-payment / hourly / daily caps, host allow/block lists, category screening |
+| **Auditability** | every decision (allowed/denied/settled/failed) appended to a JSONL ledger |
+
+---
+
+## Quick start (local, no Docker)
 
 ```bash
 npm install
+
+# 1. Readiness check — expect all ✓ and "READY"
+npm run agent -- doctor
+
+# 2. Create / show the agent's wallet (persists agent/.agent-key on first run)
+npm run agent -- wallet
+#    Fund it with testnet USDC: https://faucet.circle.com/
+#    then deposit into Gateway for nanopayments (see "Funding" below).
+
+# 3. Full end-to-end smoke test (boots the server, pays /nano, checks the ledger)
+npm run agent:smoke           # → "SMOKE: PASS", exit 0 when live-ready
+
+# 4. Or drive it by hand: run the server in one terminal…
+npm start                     # serves /hello-world and /nano on :3000
+#    …and in another:
+npm run agent -- discover http://localhost:3000/nano
+npm run agent -- pay http://localhost:3000/nano
+npm run agent -- audit
 ```
 
-## Running the server
+**Prerequisites:** Node 20+ (22 LTS recommended). An Arc Testnet wallet funded
+with testnet USDC.
+
+---
+
+## Quick start (Docker)
+
+The image runs the paywall server by default and the agent CLI on demand.
 
 ```bash
-npm start
+cp .env.example .env          # optional: set PRIVATE_KEY, guardrails, etc.
+
+# Paywall server live on http://localhost:3000
+docker compose up --build server
+
+# Agent commands (separate terminal) — note the service hostname `server`:
+docker compose run --rm agent doctor
+docker compose run --rm agent pay http://server:3000/nano
+docker compose run --rm agent audit
+
+# Full smoke test inside the container:
+docker compose run --rm --entrypoint npm agent run agent:smoke
 ```
 
-This runs `tsx server.ts` and listens on `http://localhost:3000`.
+The agent's wallet key and audit ledger persist in the `agent-data` Docker
+volume (`/data/.agent-key`, `/data/ledger.jsonl`) — kept out of the image and
+out of git. For hosting, set `PRIVATE_KEY` in the environment instead and the
+agent uses that key directly.
 
-Endpoints:
-- `GET /hello-world` — paywalled at `$0.01` USDC via the Gateway middleware
-- `GET /api/settlement/:id` — proxies the Gateway settlement lookup
-- `GET /api/decode-batch/:hash` — decodes a `submitBatch` transaction
-- `GET /api/batch-tx/:id` — resolves a settlement id to its on-chain batch tx
-- `/` — redirects to `/buyer.html` (browser-based buyer UI)
+### Deploy as a hosted service
 
-## Running the buyer (browser — recommended)
+The same image runs anywhere that takes a container (Fly.io, Render, Railway,
+ECS, a VM). It listens on `$PORT` (default 3000). Provide `PRIVATE_KEY` as a
+secret and, if your host can't reach `gateway-api-testnet.circle.com` via normal
+DNS, leave `AGENT_DOH=1` (the default) — see **Troubleshooting** below.
 
-With the server running, open `http://localhost:3000/` in a browser. The page (`public/buyer.html`) connects to MetaMask, prompts you to switch to Arc Testnet, and signs the EIP-712 payment authorization in the wallet. No env vars or private keys required.
+---
 
-After paying, the page renders a six-step **payment trace** for the settlement you just created, with every step linked to the corresponding facilitator API call or block-explorer page. You can also paste any existing settlement UUID into the "Payment trace" input to inspect a past payment — the page ships with one pre-loaded so the trace is browseable without paying first.
+## Architecture
 
-## Payment lifecycle walkthrough
+```
+agent/
+  config.ts      constants, guardrail + agent config, the $0.000001 floor
+  wallet.ts      generate / load the agent's own key (self-custody via viem)
+  net.ts         DNS-over-HTTPS resolver (bypasses ISP hijacking of *.circle.com)
+  ledger.ts      append-only JSONL audit log + rolling-window spend math
+  guardrails.ts  policy gate: amount caps, allow/block lists, categories
+  discovery.ts   probe(url) for 402 challenges + Circle marketplace search
+  skills.ts      pluggable skill registry + two built-in skills
+  agent.ts       CircleAgent: wallet + guardrails + Gateway pay + cross-chain
+  doctor.ts      readiness check (wallet, RPC, Gateway API, balances)
+  smoke.ts       end-to-end CI gate: doctor → discover → pay → audit
+  cli.ts         command-line entry point
+  index.ts       library barrel for `import { CircleAgent }`
 
-What `public/buyer.html` actually shows after a `/hello-world` payment, step by step. Open the page locally to interact with the live links; the screenshots below are what you'd see for the pre-loaded demo settlement `c9933054-6b34-44bb-8c04-e7e9e1b8352c`.
+server.ts          x402 paywall server (/hello-world $0.01, /nano $0.000001)
+buyer.ts           minimal CLI buyer (pay from a raw private key)
+decode-batch.ts    decode an on-chain Gateway submitBatch tx
+public/buyer.html  browser buyer + step-by-step payment trace UI
+```
 
-### 1. Buyer signs an EIP-712 payment authorization (off-chain)
+### How a payment flows
 
-The buyer's wallet signs a `TransferWithAuthorization` typed-data message scoped to the `GatewayWallet` contract. No transaction, no gas — just a signature that authorizes a debit up to `value` before `validBefore`.
+1. `agent.pay(url)` probes the URL, reads the `402` challenge, and decodes the
+   exact price/seller/network — no money moves yet.
+2. The price + host + category go through `Guardrails.check()`, which consults
+   the ledger for rolling hourly/daily spend. A denial is logged and returned
+   as `{ ok: false, reason }`; the agent never signs.
+3. If allowed, the chain's `GatewayClient` signs the EIP-712 authorization and
+   submits it to Circle's facilitator. A settlement UUID returns in <500ms and
+   is logged as `settled`.
+4. Circle's relayer later batches that settlement into one on-chain
+   `submitBatch` tx — which `decode-batch.ts` and `public/buyer.html` can unpack.
 
-![Step 1 — EIP-712 sign](public/img/trace-step-1-eip712.png)
+---
 
-### 2. Merchant's middleware settles via the Circle facilitator
-
-The server's `createGatewayMiddleware` (see `server.ts`) forwards the signed authorization to Circle's facilitator with `POST /v1/x402/settle`. The facilitator returns a **settlement UUID** — not yet a tx hash.
-
-![Step 2 — facilitator settle](public/img/trace-step-2-facilitator.png)
-
-### 3. Settlement queued (`status: received`)
-
-Circle's Gateway accepts the signed auth, optimistically debits the buyer's balance, and returns the UUID. The on-chain tx hasn't fired yet — the relayer batches multiple payments before broadcasting. Inspect the settlement via `GET /v1/x402/transfers/:id` (also exposed locally at `/api/settlement/:id`).
-
-![Step 3 — settlement queued](public/img/trace-step-3-queued.png)
-
-### 4. Relayer batches multiple transfers
-
-Circle's relayer (an EOA controlled by Circle — `0xc73e…a884` for the pinned demo settlement, but Circle may rotate it) waits for a flush trigger (volume or timer) and then calls `submitBatch(calldataBytes, signature)` on the `GatewayWallet` contract. One on-chain tx settles many buyers' payments at once. On Arc Testnet, traffic is low and you should usually expect a ~10 minute wait before your settlement makes it on-chain — under heavy traffic the relayer flushes much faster (every few seconds), but you won't see that on testnet today.
-
-![Step 4 — relayer batches](public/img/trace-step-4-relayer.png)
-
-### 5. On-chain `submitBatch` tx
-
-This is the step `decode-batch.ts` exists to unpack. The page resolves the batch tx via `/api/batch-tx/:id`, then `/api/decode-batch/:hash` pulls apart `calldataBytes` to show the `batchId`, the per-buyer signed deltas (negative = debit, positive = credit, sum = zero), and the net transfers inferred by pairing equal-and-opposite deltas. The buyer's own row is highlighted with a `you` badge.
-
-![Step 5 — on-chain submitBatch](public/img/trace-step-5-onchain.png)
-
-### 6. Settlement marked completed
-
-After the batch tx is mined, Circle updates the settlement record. `updatedAt` on completed settlements aligns with the batch tx's block timestamp (±2s), which is the heuristic `decode-batch.ts` uses to attach settlement UUIDs back to the buyer entries above.
-
-![Step 6 — settlement marked completed](public/img/trace-step-6-completed.png)
-
-## Running the buyer (CLI — optional)
-
-Only use this if you want to pay from a raw private key instead of MetaMask. In a separate terminal, with the server running:
+## Funding the agent
 
 ```bash
-export PRIVATE_KEY=0x...   # Arc Testnet wallet private key
-npm run buyer              # pays http://localhost:3000/hello-world
+# 1. Fund the agent's address with testnet USDC
+npm run agent -- wallet                 # prints the address
+#    → https://faucet.circle.com/
+
+# 2. Deposit into Circle Gateway for nanopayments (one-time, on-chain)
+#    Either via the Circle CLI…
+CIRCLE_ACCEPT_TERMS=1 circle gateway deposit \
+  --amount 1 --address <agent-address> --chain ARC-TESTNET --method direct
+#    …or the agent already holds the key, so a GatewayClient deposit works too.
+
+# 3. Confirm
+npm run agent -- balances
 ```
 
-To pay a different URL:
+---
 
-```bash
-npx tsx buyer.ts http://localhost:3000/hello-world
-```
+## Guardrail configuration
 
-## Decoding a batch transaction (CLI)
+Defaults live in `DEFAULT_GUARDRAILS` (`agent/config.ts`) and can be overridden
+per-run via environment variables:
 
-`decode-batch.ts` is the centerpiece of this repo. It takes a Gateway `submitBatch(...)` transaction hash and pulls apart the on-chain calldata to show:
+| Env var | Meaning | Default |
+|---|---|---|
+| `AGENT_MAX_PER_PAYMENT` | reject any single payment above this (USDC) | `1.0` |
+| `AGENT_MAX_PER_HOUR` | rolling 1-hour spend ceiling | `5.0` |
+| `AGENT_MAX_PER_DAY` | rolling 24-hour spend ceiling | `20.0` |
+| `AGENT_ALLOWED_HOSTS` | comma-separated allowlist (empty = any) | _(empty)_ |
+| `AGENT_BLOCKED_HOSTS` | comma-separated blocklist | _(empty)_ |
+| `AGENT_KEY_PATH` | where the agent's key is stored | `agent/.agent-key` |
+| `AGENT_LEDGER_PATH` | audit ledger path | `agent/ledger.jsonl` |
+| `PRIVATE_KEY` | use this key instead of the persisted file | _(unset)_ |
+| `AGENT_DOH` | DNS-over-HTTPS bypass on/off | `1` |
 
-- the `batchId` and `relayer` that submitted the batch,
-- the `(address, int256 delta)` pairs encoded inside `calldataBytes` — i.e. every buyer/recipient whose balance shifted in that batch,
-- the **net transfers** inferred by pairing each negative delta with an equal-and-opposite positive,
-- and the **off-chain settlement UUIDs** for each buyer, looked up against Circle's facilitator API and matched by block-timestamp window. Settlement UUIDs aren't stored on-chain, so this is a heuristic — useful for tracing demo payments, but expect aggregate deltas (one entry can be the sum of several settlements that landed in the same batch window).
+The `$0.000001` per-payment floor is fixed (not overridable) — it permits true
+nanopayments while blocking fee-dust griefing.
 
-`decode-batch.ts` is also imported by the server's `/api/decode-batch/:hash` endpoint, which is what the browser trace UI calls.
+---
 
-```bash
-npx tsx decode-batch.ts 0xfbad1baae7fd9b88f4e1b034a4236da02012870acbd6ae83b583e85528be396e
-```
+## Readiness & testing
 
-That hash is the batch tx for the demo settlement pinned in `public/buyer.html`. Replace it with any `submitBatch(...)` tx hash on Arc Testnet.
+- **`npm run agent -- doctor`** — PASS/WARN/FAIL per dependency (wallet, RPC,
+  Gateway API, balances, guardrails) and a `READY` / `NOT READY` verdict
+  (exit 1 on any hard FAIL).
+- **`npm run agent:smoke`** — boots the server and runs the full live path
+  (doctor → discover → pay → audit). Exits `0` only if a real `$0.000001`
+  nanopayment settled. Drop it into CI as a pre-deploy gate.
+- **`npm run agent:typecheck`** — strict TypeScript check across the agent and
+  the root entrypoints.
 
-Override the RPC endpoint with `ARC_TESTNET_RPC` (default: `https://rpc.testnet.arc.network`):
+---
 
-```bash
-ARC_TESTNET_RPC=https://your.rpc.url npx tsx decode-batch.ts 0x<batch-tx-hash>
-```
+## Troubleshooting: "Circle Gateway API unreachable (fetch failed)"
 
-You can find more batch tx hashes by clicking through from the buyer page's "Payment trace" section, or by querying `/api/batch-tx/:settlement-id`.
+If `doctor` shows `✗ Circle Gateway API … fetch failed` despite working
+internet, your network is probably **hijacking DNS for `*.circle.com`** (some
+ISP content filters resolve `gateway-api-testnet.circle.com` to a filter box
+with a bogus TLS cert). helios_nano fixes this automatically: `agent/net.ts`
+resolves `*.circle.com` over **DNS-over-HTTPS** (Cloudflare / Google) and
+connects to the real IP with the correct TLS SNI. It's wired into every
+entrypoint, so no action is needed; toggle with `AGENT_DOH=0/1`.
 
-## Configuration
+The standalone `circle` CLI is a separate binary this fix can't patch — on a
+hijacking network add `104.18.26.249 gateway-api-testnet.circle.com` to
+`/etc/hosts`, or use a VPN.
 
-The seller address, facilitator URL, and Arc Testnet network id are hardcoded near the top of `server.ts`. Edit those constants to point at a different seller wallet or network.
+See **`agent/README.md`** for the deep-dive on the agent internals, skills, and
+the payment lifecycle walkthrough.
+
+---
+
+## Security notes
+
+- The agent key is **self-custody and testnet-only**. It's gitignored
+  (`agent/.agent-key`) and never baked into the Docker image. Use a throwaway
+  key; never point `PRIVATE_KEY` at a mainnet wallet.
+- The audit ledger (`agent/ledger.jsonl`) is gitignored too.
+- Guardrails are enforced before signing, but they are a policy layer, not a
+  custody boundary — keep balances small on testnet.
+
+## License
+
+ISC.

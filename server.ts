@@ -1,7 +1,12 @@
 import express from "express";
+import { installDohResolver } from "./agent/net.ts";
 import { createGatewayMiddleware } from "@circle-fin/x402-batching/server";
 import { formatUnits } from "viem";
 import { decodeBatch } from "./decode-batch.ts";
+
+// Bypass ISP DNS hijacking of *.circle.com (resolve the facilitator via DoH).
+installDohResolver();
+
 
 type PaidRequest = express.Request & {
   payment?: {
@@ -33,6 +38,21 @@ app.get("/hello-world", gateway.require("$0.01"), (req: PaidRequest, res) => {
 
   res.json({
     message: "hello, world — you paid for this",
+    paid_by: payer,
+    amount_usdc: formatted,
+    network,
+    settlementId: transaction,
+  });
+});
+
+// Nano endpoint: priced at the smallest possible USDC payment — $0.000001
+// (1 atomic unit). This is the target the autonomous agent pays.
+app.get("/nano", gateway.require("$0.000001"), (req: PaidRequest, res) => {
+  const { payer, amount, network, transaction } = req.payment!;
+  const formatted = formatUnits(BigInt(amount), 6);
+  console.log(`nano paid ${formatted} USDC by ${payer} settlement=${transaction ?? "?"}`);
+  res.json({
+    message: "nano resource — paid with a $0.000001 USDC nanopayment",
     paid_by: payer,
     amount_usdc: formatted,
     network,
@@ -112,7 +132,7 @@ app.get("/api/batch-tx/:id", async (req, res) => {
   });
 });
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT ?? 3000);
 app.listen(PORT, () => {
   console.log(`listening on http://localhost:${PORT}`);
   console.log(`seller: ${SELLER}`);
