@@ -5,6 +5,18 @@ with its own wallet, Circle Gateway nanopayments down to **$0.000001**, gas-free
 batched settlement in **<500ms**, cross-chain USDC, and built-in compliance
 guardrails. Targets **Arc Testnet**, where USDC is the native gas token.
 
+🟢 **Live demo:** https://heliosnano-pay.up.railway.app — open `/` for the
+browser buyer + payment trace, `/nano` for the $0.000001 paywall, `/health` for
+the liveness probe.
+
+```bash
+# Pay the live endpoint from the agent (needs a funded Arc-Testnet key):
+WORKER_TARGET_URL=https://heliosnano-pay.up.railway.app/nano \
+  PRIVATE_KEY=<funded-key> npm run agent:worker
+# → ✓ settled $0.000001 on arcTestnet … settlement <uuid>
+```
+
+
 It ships as one repo with three parts:
 
 1. **The agent** (`agent/`) — the headline. Generates its own wallet, probes
