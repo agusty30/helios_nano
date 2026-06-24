@@ -24,6 +24,12 @@ services:
     volumes:
       - agent-data:/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # The autonomous agent CLI. Not started by default (tools profile); invoke
   # on demand with `docker compose run --rm agent <command>`.

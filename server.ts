@@ -22,6 +22,10 @@ const SELLER = "0x933a2405f84c224be1ef373ba16e992e1f459682";
 
 const app = express();
 
+// Unauthenticated liveness probe for platform healthchecks (Railway, etc.).
+// The paywalled routes return 402, so a dedicated 200 endpoint is needed.
+app.get("/health", (_req, res) => res.json({ status: "ok", seller: SELLER }));
+
 app.get("/", (_req, res) => res.redirect("/buyer.html"));
 app.use(express.static("public"));
 

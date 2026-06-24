@@ -97,10 +97,33 @@ agent uses that key directly.
 
 ### Deploy as a hosted service
 
-The same image runs anywhere that takes a container (Fly.io, Render, Railway,
-ECS, a VM). It listens on `$PORT` (default 3000). Provide `PRIVATE_KEY` as a
-secret and, if your host can't reach `gateway-api-testnet.circle.com` via normal
-DNS, leave `AGENT_DOH=1` (the default) — see **Troubleshooting** below.
+The same image runs anywhere that takes a container (Railway, Fly.io, Render,
+ECS, a VM). It listens on `$PORT` (Railway/most PaaS inject this; defaults to
+3000) and exposes an unauthenticated `GET /health` liveness probe.
+
+**Railway** (config in `railway.json`):
+
+```bash
+npm i -g @railway/cli
+railway login
+railway init                 # link/create a project
+railway up                   # builds the Dockerfile and deploys
+
+# Optional env (all have sane defaults in agent/config.ts):
+railway variables set AGENT_DOH=1
+railway variables set ARC_TESTNET_RPC=<your-arc-rpc>
+```
+
+Railway auto-detects the `Dockerfile`, runs `npm start` (the paywall server),
+and healthchecks `/health`. The **server needs no secrets** — it validates
+payments via Circle's facilitator and never signs. Only set `PRIVATE_KEY` if you
+later wrap the *agent* (buyer) as a long-running service; for that, add it as a
+Railway secret rather than an env var.
+
+CI/CD: pushes to `main` run typecheck + Docker build via GitHub Actions
+(`.github/workflows/ci.yml`); the live smoke test runs there too if you add a
+funded Arc-Testnet key as the `AGENT_PRIVATE_KEY` repo secret.
+
 
 ---
 
