@@ -14,48 +14,14 @@
  * Wallet key is persisted to AGENT_KEY_PATH (default ./agent/.agent-key).
  * Guardrails can be overridden with AGENT_MAX_PER_PAYMENT / _PER_HOUR / _PER_DAY.
  */
-import { resolve } from "node:path";
 import { installDohResolver } from "./net.ts";
-import { loadOrCreateWallet } from "./wallet.ts";
+import { CircleAgent } from "./agent.ts";
+import { runDoctor, formatDoctor } from "./doctor.ts";
+import { buildConfigFromEnv } from "./env.ts";
 
 installDohResolver();
 
-import { CircleAgent } from "./agent.ts";
-import { runDoctor, formatDoctor } from "./doctor.ts";
-import {
-  DEFAULT_CHAIN,
-  DEFAULT_GUARDRAILS,
-  ARC_TESTNET_RPC,
-  type AgentConfig,
-} from "./config.ts";
-
-function buildConfig(): AgentConfig {
-  const keyPath = process.env.AGENT_KEY_PATH ?? resolve("agent/.agent-key");
-  const ledgerPath = process.env.AGENT_LEDGER_PATH ?? resolve("agent/ledger.jsonl");
-  const wallet = process.env.PRIVATE_KEY
-    ? { privateKey: process.env.PRIVATE_KEY as `0x${string}` }
-    : loadOrCreateWallet(keyPath);
-
-  const num = (v: string | undefined, d: number) =>
-    v !== undefined ? Number(v) : d;
-
-  return {
-    privateKey: wallet.privateKey,
-    chain: DEFAULT_CHAIN,
-    rpcUrl: process.env.ARC_TESTNET_RPC ?? ARC_TESTNET_RPC,
-    ledgerPath,
-    guardrails: {
-      ...DEFAULT_GUARDRAILS,
-      maxPerPayment: num(process.env.AGENT_MAX_PER_PAYMENT, DEFAULT_GUARDRAILS.maxPerPayment),
-      maxPerHour: num(process.env.AGENT_MAX_PER_HOUR, DEFAULT_GUARDRAILS.maxPerHour),
-      maxPerDay: num(process.env.AGENT_MAX_PER_DAY, DEFAULT_GUARDRAILS.maxPerDay),
-      allowedHosts: process.env.AGENT_ALLOWED_HOSTS?.split(",").filter(Boolean) ??
-        DEFAULT_GUARDRAILS.allowedHosts,
-      blockedHosts: process.env.AGENT_BLOCKED_HOSTS?.split(",").filter(Boolean) ??
-        DEFAULT_GUARDRAILS.blockedHosts,
-    },
-  };
-}
+const buildConfig = buildConfigFromEnv;
 
 function buildAgent(): CircleAgent {
   return new CircleAgent(buildConfig());

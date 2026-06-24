@@ -114,7 +114,15 @@ export class CircleAgent {
     if (!svc.paid || svc.accepts.length === 0) {
       // Not paywalled — fetch free, no money moves, no guardrail needed.
       const res = await fetch(url, { method: opts.method ?? "GET" });
-      const data = (await res.json().catch(() => res.text())) as T;
+      // Read the body once, then try to parse as JSON (can't call both
+      // res.json() and res.text() — the second throws "Body already read").
+      const text = await res.text();
+      let data: T;
+      try {
+        data = JSON.parse(text) as T;
+      } catch {
+        data = text as T;
+      }
       return {
         ok: true,
         data,

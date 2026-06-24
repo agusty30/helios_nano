@@ -20,20 +20,13 @@
  *   plus all AGENT_* / PRIVATE_KEY / ARC_TESTNET_RPC vars the CLI honours.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { resolve } from "node:path";
 import { installDohResolver } from "./net.ts";
-import { loadOrCreateWallet } from "./wallet.ts";
 
 installDohResolver();
 
 import { CircleAgent } from "./agent.ts";
 import { runDoctor } from "./doctor.ts";
-import {
-  DEFAULT_CHAIN,
-  DEFAULT_GUARDRAILS,
-  ARC_TESTNET_RPC,
-  type AgentConfig,
-} from "./config.ts";
+import { buildConfigFromEnv } from "./env.ts";
 
 const PORT = Number(process.env.SMOKE_PORT ?? 3100);
 const MAX_LATENCY = Number(process.env.SMOKE_MAX_LATENCY ?? 500);
@@ -52,21 +45,7 @@ function die(msg: string): never {
   process.exit(1);
 }
 
-function buildConfig(): AgentConfig {
-  const keyPath = process.env.AGENT_KEY_PATH ?? resolve("agent/.agent-key");
-  const ledgerPath =
-    process.env.AGENT_LEDGER_PATH ?? resolve("agent/ledger.jsonl");
-  const wallet = process.env.PRIVATE_KEY
-    ? { privateKey: process.env.PRIVATE_KEY as `0x${string}` }
-    : loadOrCreateWallet(keyPath);
-  return {
-    privateKey: wallet.privateKey,
-    chain: DEFAULT_CHAIN,
-    rpcUrl: process.env.ARC_TESTNET_RPC ?? ARC_TESTNET_RPC,
-    ledgerPath,
-    guardrails: { ...DEFAULT_GUARDRAILS },
-  };
-}
+const buildConfig = buildConfigFromEnv;
 
 /** Start `tsx server.ts` on SMOKE_PORT and resolve once it's listening. */
 function startServer(): Promise<ChildProcess> {

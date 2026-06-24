@@ -124,6 +124,37 @@ CI/CD: pushes to `main` run typecheck + Docker build via GitHub Actions
 (`.github/workflows/ci.yml`); the live smoke test runs there too if you add a
 funded Arc-Testnet key as the `AGENT_PRIVATE_KEY` repo secret.
 
+### Scheduled buyer (Railway cron / any timer)
+
+`agent/worker.ts` pays a target endpoint once and exits — drop it on a schedule
+to have the agent autonomously buy a resource on a timer, inside the guardrails.
+
+Locally:
+
+```bash
+docker compose up -d server
+docker compose run --rm \
+  -e PRIVATE_KEY=<funded-key> \
+  -e WORKER_TARGET_URL=http://server:3000/nano \
+  worker            # → "✓ settled $0.000001 … settlement <uuid>", exit 0
+```
+
+On Railway: add a **second service** from the same repo, set its **Custom Start
+Command** to `npm run agent:worker` and a **Cron Schedule** (e.g. `0 * * * *`
+for hourly), then set the variables:
+
+| Variable | Value |
+|---|---|
+| `WORKER_TARGET_URL` | the x402 resource to buy (e.g. your server's `/nano`) |
+| `PRIVATE_KEY` | a **funded** Arc-Testnet key (Railway **secret**) |
+| `WORKER_METHOD` | `GET` or `POST` (optional, default GET) |
+| `AGENT_MAX_PER_PAYMENT` | hard per-run spend cap (recommended) |
+
+Cron boxes are ephemeral, so the rolling hourly/daily caps reset each run unless
+you attach a volume at `AGENT_LEDGER_PATH` — rely on `AGENT_MAX_PER_PAYMENT` as
+the firm limit there.
+
+
 
 ---
 

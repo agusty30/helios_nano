@@ -9,7 +9,8 @@
     "buyer": "tsx buyer.ts",
     "agent": "tsx agent/cli.ts",
     "agent:typecheck": "tsc -p tsconfig.agent.json",
-    "agent:smoke": "tsx agent/smoke.ts"
+    "agent:smoke": "tsx agent/smoke.ts",
+    "agent:worker": "tsx agent/worker.ts"
   },
   "keywords": [],
   "author": "",

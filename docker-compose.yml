@@ -52,6 +52,31 @@ services:
     volumes:
       - agent-data:/data
 
+  # Scheduled buyer: pays WORKER_TARGET_URL once and exits. Run on a timer
+  # (Railway cron / `docker compose run`). Not started by default (tools profile).
+  #   docker compose run --rm -e WORKER_TARGET_URL=http://server:3000/nano worker
+  worker:
+    build: .
+    image: helios_nano
+    profiles: ["tools"]
+    depends_on:
+      - server
+    command: ["npm", "run", "agent:worker"]
+    environment:
+      - WORKER_TARGET_URL
+      - WORKER_METHOD
+      - WORKER_CATEGORY
+      - ARC_TESTNET_RPC
+      - AGENT_DOH
+      - PRIVATE_KEY
+      - AGENT_MAX_PER_PAYMENT
+      - AGENT_MAX_PER_HOUR
+      - AGENT_MAX_PER_DAY
+      - AGENT_ALLOWED_HOSTS
+      - AGENT_BLOCKED_HOSTS
+    volumes:
+      - agent-data:/data
+
 volumes:
   # Persists the agent's wallet key (/data/.agent-key) and audit ledger across
   # runs, kept out of the image and out of git.
