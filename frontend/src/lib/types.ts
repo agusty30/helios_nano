@@ -10,3 +10,20 @@ export interface CanvasMetrics {
   circuit_breaker: boolean;
   chain: string;
 }
+
+export interface TransactionEvent {
+  id: string;
+  timestamp: number;
+  route: "cheap_tier" | "heavy_tier";
+  cost: number;
+  model: string;
+  settlement: string;
+}
+
+export type RouteColor = "mint" | "gold" | "crimson";
+
+export function routeToColor(route: string): RouteColor {
+  if (route === "cheap_tier") return "mint";
+  if (route === "heavy_tier") return "gold";
+  return "crimson";
+}
