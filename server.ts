@@ -26,8 +26,22 @@ const app = express();
 // The paywalled routes return 402, so a dedicated 200 endpoint is needed.
 app.get("/health", (_req, res) => res.json({ status: "ok", seller: SELLER }));
 
-app.get("/", (_req, res) => res.redirect("/buyer.html"));
+app.get("/", (_req, res) => res.redirect("/dashboard.html"));
 app.use(express.static("public"));
+
+// Read-only status for the dashboard. No secrets — just public seller config.
+app.get("/api/status", (_req, res) => {
+  res.json({
+    seller: SELLER,
+    network: "eip155:5042002",
+    chainId: 5042002,
+    chainName: "Arc Testnet",
+    prices: { nano: "$0.000001", helloWorld: "$0.01" },
+    endpoints: ["/nano", "/hello-world"],
+    explorer: "https://testnet.arcscan.app",
+    time: new Date().toISOString(),
+  });
+});
 
 const gateway = createGatewayMiddleware({
   sellerAddress: SELLER,
@@ -74,6 +88,24 @@ const PINNED_BATCH_TX: Record<string, `0x${string}`> = {
   "c9933054-6b34-44bb-8c04-e7e9e1b8352c":
     "0xfbad1baae7fd9b88f4e1b034a4236da02012870acbd6ae83b583e85528be396e",
 };
+
+// Recent settlements paid TO this seller — powers the dashboard live feed.
+app.get("/api/transfers", async (req, res) => {
+  const limit = Math.min(Number(req.query.limit ?? 10) || 10, 50);
+  try {
+    const r = await fetch(
+      `${GATEWAY_API}/v1/x402/transfers?to=${SELLER}&pageSize=${limit}`,
+    );
+    if (!r.ok) {
+      res.status(r.status).type("application/json").send(await r.text());
+      return;
+    }
+    const data = (await r.json()) as { transfers?: unknown[] };
+    res.json({ transfers: (data.transfers ?? []).slice(0, limit) });
+  } catch (e) {
+    res.status(502).json({ error: String((e as Error).message ?? e) });
+  }
+});
 
 app.get("/api/settlement/:id", async (req, res) => {
   const r = await fetch(`${GATEWAY_API}/v1/x402/transfers/${req.params.id}`);

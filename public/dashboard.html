@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>helios_nano — autonomous x402 nanopayments</title>
+    <style>
+      :root {
+        --bg: #0b0e14;
+        --panel: #131825;
+        --panel-2: #1a2030;
+        --line: #232b3d;
+        --fg: #e7ecf5;
+        --muted: #8a95ab;
+        --accent: #5b8cff;
+        --accent-2: #38e0c4;
+        --ok: #3ddc84;
+        --warn: #ffca57;
+        --err: #ff6b6b;
+        --grad: linear-gradient(135deg, #5b8cff 0%, #38e0c4 100%);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(1200px 600px at 70% -10%, #16213a 0%, var(--bg) 55%);
+        color: var(--fg);
+        min-height: 100vh;
+      }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 64px; }
+      code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; }
+
+      header.hero { padding: 28px 0 8px; }
+      .logo {
+        display: inline-flex; align-items: center; gap: 10px;
+        font-weight: 700; font-size: 15px; letter-spacing: .3px;
+      }
+      .logo .dot {
+        width: 12px; height: 12px; border-radius: 50%;
+        background: var(--grad); box-shadow: 0 0 18px 2px rgba(56,224,196,.5);
+      }
+      h1 {
+        font-size: clamp(28px, 5vw, 44px); line-height: 1.1; margin: 18px 0 10px;
+        background: var(--grad); -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .sub { color: var(--muted); max-width: 680px; font-size: 16px; }
+      .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 6px; }
+      .pill {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+        padding: 6px 12px; font-size: 13px; color: var(--muted);
+      }
+      .pill b { color: var(--fg); font-weight: 600; }
+
+      .grid { display: grid; gap: 16px; }
+      .cards { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin: 26px 0; }
+      .card {
+        background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+        border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;
+      }
+      .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+      .card .v { font-size: 22px; font-weight: 700; margin-top: 6px; }
+      .card .v.small { font-size: 14px; font-weight: 600; word-break: break-all; }
+
+      .panel {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+        padding: 22px; margin: 18px 0;
+      }
+      .panel h2 { margin: 0 0 4px; font-size: 19px; }
+      .panel p.lead { margin: 0 0 16px; color: var(--muted); }
+
+      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+      button {
+        font: inherit; font-weight: 600; cursor: pointer; border: none; border-radius: 10px;
+        padding: 11px 16px; color: #06121f; background: var(--grad);
+        transition: transform .05s ease, opacity .2s ease;
+      }
+      button.ghost { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); }
+      button:hover { transform: translateY(-1px); }
+      button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+      .badge {
+        padding: 4px 10px; border-radius: 8px; font-family: ui-monospace, monospace;
+        font-size: 12px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+      }
+      .badge.ok { color: var(--ok); border-color: rgba(61,220,132,.35); }
+      .badge.warn { color: var(--warn); border-color: rgba(255,202,87,.35); }
+      .badge.err { color: var(--err); border-color: rgba(255,107,107,.35); }
+      pre {
+        background: #0a0d14; border: 1px solid var(--line); border-radius: 10px;
+        padding: 12px 14px; overflow: auto; font-size: 12.5px; margin: 12px 0 0; color: #cdd6e6;
+      }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+      th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+      th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+      td.mono { font-family: ui-monospace, monospace; font-size: 12px; }
+      .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+      .status-dot.completed, .status-dot.confirmed { background: var(--ok); }
+      .status-dot.received, .status-dot.batched { background: var(--warn); }
+      .status-dot.failed { background: var(--err); }
+      .muted { color: var(--muted); }
+      footer { color: var(--muted); font-size: 13px; margin-top: 36px; text-align: center; }
+      .steps { counter-reset: s; margin: 14px 0 0; padding: 0; list-style: none; }
+      .steps li { position: relative; padding: 6px 0 6px 30px; color: var(--muted); }
+      .steps li::before {
+        counter-increment: s; content: counter(s);
+        position: absolute; left: 0; top: 6px; width: 20px; height: 20px; border-radius: 50%;
+        background: var(--panel-2); border: 1px solid var(--line); color: var(--fg);
+        font-size: 11px; display: flex; align-items: center; justify-content: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <span class="logo"><span class="dot"></span> helios_nano</span>
+        <h1>Autonomous x402 nanopayments</h1>
+        <p class="sub">
+          An AI agent with its own wallet that discovers and pays for x402 services
+          autonomously — gas-free, batched through Circle Gateway, settling in
+          &lt;500ms on Arc Testnet. Pay the live paywall below with your own wallet
+          and watch it settle.
+        </p>
+        <div class="pills">
+          <span class="pill">min payment <b>$0.000001</b></span>
+          <span class="pill">settlement <b>&lt;500ms</b></span>
+          <span class="pill">gas <b>free (batched)</b></span>
+          <span class="pill"><b>USDC</b> native gas</span>
+          <span class="pill"><a href="https://github.com/agusty30/helios_nano" target="_blank" rel="noreferrer">source ↗</a></span>
+        </div>
+      </header>
+
+      <section class="grid cards" id="cards">
+        <div class="card"><div class="k">Network</div><div class="v" id="c-net">…</div></div>
+        <div class="card"><div class="k">Gateway API</div><div class="v" id="c-api">…</div></div>
+        <div class="card"><div class="k">Nano price</div><div class="v" id="c-price">$0.000001</div></div>
+        <div class="card"><div class="k">Seller wallet</div><div class="v small" id="c-seller">…</div></div>
+      </section>
+
+      <section class="panel">
+        <h2>Try it — pay with your wallet</h2>
+        <p class="lead">
+          Spend your <em>own</em> Arc-Testnet USDC. Need funds? Grab some from the
+          <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer">Circle faucet</a>.
+          Your wallet signs an EIP-712 authorization — no gas, no transaction to confirm.
+        </p>
+        <div class="row">
+          <button id="connect">Connect MetaMask</button>
+          <span id="addr" class="badge">not connected</span>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button id="payNano" disabled>Pay $0.000001 → /nano</button>
+          <button id="payHello" class="ghost" disabled>Pay $0.01 → /hello-world</button>
+          <span id="status" class="muted"></span>
+        </div>
+        <pre id="out" style="display:none"></pre>
+        <ol class="steps">
+          <li>Your wallet signs a <code>TransferWithAuthorization</code> (off-chain, gasless)</li>
+          <li>Circle's facilitator settles it and returns a settlement UUID in &lt;500ms</li>
+          <li>The relayer batches it into one on-chain <code>submitBatch</code> tx later</li>
+        </ol>
+      </section>
+
+      <section class="panel">
+        <div class="row" style="justify-content:space-between">
+          <div><h2 style="margin:0">Live settlements</h2>
+          <p class="lead" style="margin:2px 0 0">Recent nanopayments to this seller, via the Gateway API.</p></div>
+          <button class="ghost" id="refresh">Refresh</button>
+        </div>
+        <div id="feed"><p class="muted" style="margin-top:14px">Loading…</p></div>
+      </section>
+
+      <footer>
+        helios_nano · Arc Testnet · built with Circle Gateway x402 ·
+        <a href="/buyer.html">detailed payment trace →</a>
+      </footer>
+    </div>
+
+    <script type="module">
+      const ARC_HEX = "0x4cef52";
+      const ARC = {
+        chainId: ARC_HEX, chainName: "Arc Testnet",
+        nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+        rpcUrls: ["https://rpc.testnet.arc-node.thecanteenapp.com/v1/swrm_3aa8a9334770e6eddb5cc05f2e3dbfe555eca270d4eb78fbb4b6056a4a04e2b0"],
+        blockExplorerUrls: ["https://testnet.arcscan.app"],
+      };
+      const EXPLORER = "https://testnet.arcscan.app";
+
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+      const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "—";
+      let account = null;
+
+      function setStatus(t, cls = "muted") { const e = $("status"); e.className = cls; e.textContent = t; }
+
+      // ---- Status cards ----
+      async function loadStatus() {
+        try {
+          const s = await (await fetch("/api/status")).json();
+          $("c-net").textContent = s.chainName ?? "Arc Testnet";
+          $("c-seller").innerHTML = `<a href="${EXPLORER}/address/${s.seller}" target="_blank" rel="noreferrer">${short(s.seller)}</a>`;
+          $("c-price").textContent = s.prices?.nano ?? "$0.000001";
+          // probe gateway api reachability via a transfers call
+          const tr = await fetch("/api/transfers?limit=1");
+          $("c-api").innerHTML = tr.ok
+            ? '<span class="badge ok">reachable</span>'
+            : '<span class="badge warn">degraded</span>';
+        } catch {
+          $("c-api").innerHTML = '<span class="badge err">unreachable</span>';
+        }
+      }
+
+      // ---- Live feed ----
+      async function loadFeed() {
+        const feed = $("feed");
+        try {
+          const r = await fetch("/api/transfers?limit=12");
+          if (!r.ok) throw new Error("api " + r.status);
+          const { transfers } = await r.json();
+          if (!transfers || transfers.length === 0) {
+            feed.innerHTML = '<p class="muted" style="margin-top:14px">No settlements yet — be the first to pay above.</p>';
+            return;
+          }
+          const rows = transfers.map((t) => {
+            const usdc = (Number(t.amount) / 1e6).toFixed(6);
+            const when = t.updatedAt ? new Date(t.updatedAt).toLocaleString() : "";
+            const st = t.status ?? "?";
+            return `<tr>
+              <td><span class="status-dot ${esc(st)}"></span>${esc(st)}</td>
+              <td class="mono">${usdc} USDC</td>
+              <td class="mono">${short(t.fromAddress)}</td>
+              <td class="mono"><a href="/buyer.html" title="open trace">${esc((t.id||"").slice(0,8))}…</a></td>
+              <td class="muted">${esc(when)}</td>
+            </tr>`;
+          }).join("");
+          feed.innerHTML = `<table><thead><tr><th>status</th><th>amount</th><th>buyer</th><th>settlement</th><th>updated</th></tr></thead><tbody>${rows}</tbody></table>`;
+        } catch (e) {
+          feed.innerHTML = `<p class="badge err" style="margin-top:14px">feed unavailable: ${esc(e.message)}</p>`;
+        }
+      }
+
+      // ---- Wallet + pay flow ----
+      async function ensureArc() {
+        const cur = await ethereum.request({ method: "eth_chainId" });
+        if (cur === ARC_HEX) return;
+        try {
+          await ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: ARC_HEX }] });
+        } catch (e) {
+          if (e?.code === 4902) await ethereum.request({ method: "wallet_addEthereumChain", params: [ARC] });
+          else throw e;
+        }
+      }
+      $("connect").onclick = async () => {
+        if (!window.ethereum) return setStatus("MetaMask not detected", "badge err");
+        const accts = await ethereum.request({ method: "eth_requestAccounts" });
+        account = accts[0];
+        $("addr").textContent = short(account);
+        $("addr").className = "badge ok";
+        await ensureArc();
+        $("payNano").disabled = false;
+        $("payHello").disabled = false;
+        setStatus("ready", "badge ok");
+      };
+
+      function randNonce() {
+        const b = new Uint8Array(32); crypto.getRandomValues(b);
+        return "0x" + [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+      }
+      const b64e = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+      const b64d = (s) => decodeURIComponent(escape(atob(s)));
+
+      async function payFor(endpoint, label) {
+        const out = $("out");
+        out.style.display = "none";
+        try {
+          setStatus("fetching 402 challenge…");
+          const r1 = await fetch(endpoint);
+          if (r1.status !== 402) { setStatus(`unexpected ${r1.status}`, "badge err"); return; }
+          const ch = JSON.parse(b64d(r1.headers.get("PAYMENT-REQUIRED")));
+          const a = ch.accepts[0];
+          const chainId = parseInt(a.network.split(":")[1], 10);
+          const now = Math.floor(Date.now() / 1000);
+          const validBefore = (now + Math.max(a.maxTimeoutSeconds, 7 * 24 * 3600 + 600)).toString();
+          const validAfter = (now - 600).toString();
+          const nonce = randNonce();
+          const typed = {
+            types: {
+              EIP712Domain: [
+                { name: "name", type: "string" }, { name: "version", type: "string" },
+                { name: "chainId", type: "uint256" }, { name: "verifyingContract", type: "address" },
+              ],
+              TransferWithAuthorization: [
+                { name: "from", type: "address" }, { name: "to", type: "address" },
+                { name: "value", type: "uint256" }, { name: "validAfter", type: "uint256" },
+                { name: "validBefore", type: "uint256" }, { name: "nonce", type: "bytes32" },
+              ],
+            },
+            primaryType: "TransferWithAuthorization",
+            domain: { name: "GatewayWalletBatched", version: "1", chainId, verifyingContract: a.extra.verifyingContract },
+            message: { from: account, to: a.payTo, value: a.amount, validAfter, validBefore, nonce },
+          };
+          setStatus("waiting for signature…");
+          const signature = await ethereum.request({ method: "eth_signTypedData_v4", params: [account, JSON.stringify(typed)] });
+          const payload = {
+            x402Version: 2,
+            payload: { signature, authorization: { from: account, to: a.payTo, value: a.amount, validAfter, validBefore, nonce } },
+            accepted: a, resource: ch.resource,
+          };
+          setStatus("settling via facilitator…");
+          const t0 = performance.now();
+          const r2 = await fetch(endpoint, { headers: { "payment-signature": b64e(payload) } });
+          const ms = Math.round(performance.now() - t0);
+          const body = await r2.json().catch(() => r2.text());
+          out.style.display = "block";
+          out.textContent = JSON.stringify({ status: r2.status, latency_ms: ms, body }, null, 2);
+          if (r2.ok) {
+            setStatus(`paid ${label} ✓ in ${ms}ms`, "badge ok");
+            setTimeout(loadFeed, 1200);
+          } else {
+            setStatus(`server returned ${r2.status}`, "badge err");
+          }
+        } catch (e) {
+          setStatus("error: " + (e?.message ?? e), "badge err");
+        }
+      }
+      $("payNano").onclick = () => payFor("/nano", "$0.000001");
+      $("payHello").onclick = () => payFor("/hello-world", "$0.01");
+      $("refresh").onclick = loadFeed;
+
+      loadStatus();
+      loadFeed();
+    </script>
+  </body>
+</html>

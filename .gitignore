@@ -6,3 +6,4 @@ node_modules/
 .venv/
 agent/.agent-key
 agent/ledger.jsonl
+agent/.agent-key.*
