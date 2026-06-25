@@ -1,29 +1,87 @@
-export interface CanvasMetrics {
-  wallet_address: string;
-  usdc_balance: number;
-  active_throughput: number;
-  last_route: "cheap_tier" | "heavy_tier" | "circuit_breaker" | "idle";
-  daily_spend: number;
-  total_saved: number;
-  requests_today: number;
-  budget_remaining: number;
-  circuit_breaker: boolean;
-  chain: string;
+export interface KpiData {
+  label: string;
+  value: string;
+  change: number;
+  icon: string;
 }
 
-export interface TransactionEvent {
+export interface Transaction {
   id: string;
-  timestamp: number;
-  route: "cheap_tier" | "heavy_tier";
-  cost: number;
-  model: string;
-  settlement: string;
+  vendor: string;
+  amount: number;
+  status: "completed" | "pending" | "failed";
+  agent: string;
+  category: string;
+  timestamp: string;
 }
 
-export type RouteColor = "mint" | "gold" | "crimson";
+export interface Agent {
+  id: string;
+  name: string;
+  status: "active" | "idle" | "paused";
+  currentTask: string;
+  successRate: number;
+  transactionsExecuted: number;
+  lastActivity: string;
+  icon: string;
+  savings: number;
+}
 
-export function routeToColor(route: string): RouteColor {
-  if (route === "cheap_tier") return "mint";
-  if (route === "heavy_tier") return "gold";
-  return "crimson";
+export interface Approval {
+  id: string;
+  requester: string;
+  amount: number;
+  vendor: string;
+  reason: string;
+  aiRecommendation: "approve" | "reject" | "review";
+  confidence: number;
+  timestamp: string;
+  department: string;
+}
+
+export interface Budget {
+  department: string;
+  allocated: number;
+  spent: number;
+  forecast: number;
+  trend: number;
+}
+
+export interface ActivityEvent {
+  id: string;
+  agent: string;
+  action: string;
+  detail: string;
+  timestamp: string;
+  type: "success" | "info" | "warning" | "action";
+}
+
+export interface SpendingData {
+  month: string;
+  actual: number;
+  budget: number;
+  optimized: number;
+}
+
+export interface CostBreakdown {
+  category: string;
+  amount: number;
+  percentage: number;
+  color: string;
+}
+
+export interface TimelineEvent {
+  time: string;
+  agent: string;
+  action: string;
+  detail: string;
+  status: "completed" | "in_progress" | "pending";
+  savings?: number;
+}
+
+export interface TractionMetrics {
+  totalAutonomousPayments: number;
+  avgTransactionSize: number;
+  budgetUtilizationEfficiency: number;
+  costPerTaskCompleted: number;
 }
