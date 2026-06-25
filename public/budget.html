@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>helios_nano — Budget Bot Dashboard</title>
+    <style>
+      :root {
+        --bg: #09090b;
+        --surface: #111113;
+        --surface-2: #18181b;
+        --surface-3: #1f1f23;
+        --border: #27272a;
+        --border-2: #3f3f46;
+        --fg: #fafafa;
+        --fg-2: #a1a1aa;
+        --fg-3: #71717a;
+        --accent: #6366f1;
+        --accent-2: #818cf8;
+        --teal: #2dd4bf;
+        --green: #34d399;
+        --amber: #fbbf24;
+        --red: #f87171;
+        --blue: #60a5fa;
+        --violet: #a78bfa;
+        --grad: linear-gradient(135deg, #6366f1 0%, #2dd4bf 100%);
+        --radius: 16px;
+        --radius-sm: 10px;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        min-height: 100vh;
+        -webkit-font-smoothing: antialiased;
+      }
+      .container { max-width: 1280px; margin: 0 auto; padding: 32px 24px 64px; }
+
+      /* Header */
+      .header { margin-bottom: 32px; }
+      .header-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+      .brand { display: flex; align-items: center; gap: 10px; }
+      .brand-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--grad); box-shadow: 0 0 12px rgba(99,102,241,.6); }
+      .brand-name { font-size: 13px; font-weight: 600; color: var(--fg-2); letter-spacing: .5px; text-transform: uppercase; }
+      .header h1 { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: -.5px; }
+      .header-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+      .pill {
+        font-size: 12px; padding: 5px 10px; border-radius: 6px;
+        background: var(--surface-2); border: 1px solid var(--border); color: var(--fg-2);
+      }
+      .pill b { color: var(--fg); font-weight: 600; }
+      .nav-links { display: flex; gap: 16px; margin-top: 12px; }
+      .nav-links a { color: var(--fg-3); font-size: 13px; transition: color .15s; }
+      .nav-links a:hover { color: var(--fg); text-decoration: none; }
+
+      /* Bento Grid */
+      .bento {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        grid-auto-rows: minmax(0, auto);
+        gap: 16px;
+      }
+      .cell {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        position: relative;
+        overflow: hidden;
+      }
+      .cell::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent 0%, rgba(99,102,241,.3) 50%, transparent 100%);
+      }
+      .cell-title { font-size: 12px; font-weight: 600; color: var(--fg-3); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 12px; }
+
+      /* Budget ring — large cell */
+      .cell-ring { grid-column: span 4; grid-row: span 2; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      .ring-wrap { position: relative; width: 180px; height: 180px; }
+      .ring-svg { transform: rotate(-90deg); }
+      .ring-bg { fill: none; stroke: var(--surface-3); stroke-width: 12; }
+      .ring-fg { fill: none; stroke: url(#grad); stroke-width: 12; stroke-linecap: round; transition: stroke-dashoffset .6s ease; }
+      .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      .ring-pct { font-size: 36px; font-weight: 700; letter-spacing: -1px; }
+      .ring-label { font-size: 12px; color: var(--fg-3); }
+      .ring-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; width: 100%; }
+      .ring-stat { text-align: center; }
+      .ring-stat .val { font-size: 18px; font-weight: 700; }
+      .ring-stat .lbl { font-size: 11px; color: var(--fg-3); text-transform: uppercase; }
+
+      /* Metric cards */
+      .cell-metric { grid-column: span 4; display: flex; flex-direction: column; justify-content: space-between; }
+      .metric-val { font-size: 32px; font-weight: 700; letter-spacing: -1px; margin: 8px 0 4px; }
+      .metric-sub { font-size: 12px; color: var(--fg-3); }
+
+      /* Category breakdown */
+      .cell-cats { grid-column: span 8; }
+      .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+      .cat-item {
+        background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+        padding: 14px 16px;
+      }
+      .cat-name { font-size: 12px; color: var(--fg-2); text-transform: capitalize; margin-bottom: 4px; }
+      .cat-spent { font-size: 16px; font-weight: 700; }
+      .cat-calls { font-size: 11px; color: var(--fg-3); }
+      .cat-bar { height: 3px; border-radius: 2px; background: var(--surface-3); margin-top: 8px; }
+      .cat-bar-fill { height: 100%; border-radius: 2px; background: var(--grad); transition: width .4s ease; }
+
+      /* Allocation table */
+      .cell-alloc { grid-column: span 8; }
+      .alloc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .alloc-table th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 600; color: var(--fg-3); text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); }
+      .alloc-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+      .alloc-table tr:last-child td { border-bottom: none; }
+      .alloc-table .svc { font-weight: 500; }
+      .alloc-table .mono { font-family: ui-monospace, "SF Mono", monospace; font-size: 12px; }
+      .alloc-table .vpd { color: var(--teal); }
+      .val-bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--grad); vertical-align: middle; margin-left: 6px; }
+
+      /* Summary cards */
+      .cell-summary { grid-column: span 4; }
+      .summary-items { display: flex; flex-direction: column; gap: 12px; }
+      .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--surface-2); border-radius: var(--radius-sm); }
+      .summary-row .lbl { font-size: 12px; color: var(--fg-2); }
+      .summary-row .val { font-size: 14px; font-weight: 600; font-family: ui-monospace, monospace; }
+
+      /* Live feed */
+      .cell-feed { grid-column: span 12; }
+      .feed-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .feed-table th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 600; color: var(--fg-3); text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); }
+      .feed-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-family: ui-monospace, monospace; font-size: 12px; }
+      .feed-table tr:last-child td { border-bottom: none; }
+      .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+      .dot-ok { background: var(--green); }
+      .dot-pending { background: var(--amber); }
+      .dot-err { background: var(--red); }
+
+      /* Responsive */
+      @media (max-width: 900px) {
+        .bento { grid-template-columns: repeat(4, 1fr); }
+        .cell-ring, .cell-cats, .cell-alloc, .cell-feed, .cell-summary, .cell-metric { grid-column: span 4; }
+        .cell-ring { grid-row: span 1; }
+      }
+      @media (max-width: 600px) {
+        .container { padding: 16px 12px 48px; }
+        .bento { grid-template-columns: 1fr; gap: 12px; }
+        .cell-ring, .cell-cats, .cell-alloc, .cell-feed, .cell-summary, .cell-metric { grid-column: span 1; }
+      }
+
+      .loading { color: var(--fg-3); font-size: 13px; padding: 20px 0; }
+      .empty { color: var(--fg-3); font-size: 13px; font-style: italic; }
+      a { color: var(--accent-2); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <div class="header-row">
+          <div>
+            <div class="brand"><span class="brand-dot"></span><span class="brand-name">helios_nano</span></div>
+            <h1>Budget Bot</h1>
+          </div>
+          <div class="header-pills">
+            <span class="pill">daily budget <b>$10.00</b></span>
+            <span class="pill"><b>23</b> services</span>
+            <span class="pill">optimizer <b>greedy value/$</b></span>
+            <span class="pill">chain <b>Arc Testnet</b></span>
+          </div>
+        </div>
+        <nav class="nav-links">
+          <a href="/dashboard.html">Payment Dashboard</a>
+          <a href="/buyer.html">Payment Trace</a>
+          <a href="https://github.com/agusty30/helios_nano" target="_blank" rel="noreferrer">Source</a>
+        </nav>
+      </header>
+
+      <div class="bento">
+        <!-- Budget Ring -->
+        <div class="cell cell-ring">
+          <div class="cell-title">Budget Used (24h)</div>
+          <div class="ring-wrap">
+            <svg class="ring-svg" width="180" height="180" viewBox="0 0 180 180">
+              <defs>
+                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#6366f1"/>
+                  <stop offset="100%" stop-color="#2dd4bf"/>
+                </linearGradient>
+              </defs>
+              <circle class="ring-bg" cx="90" cy="90" r="78"/>
+              <circle class="ring-fg" id="ring" cx="90" cy="90" r="78"
+                stroke-dasharray="490" stroke-dashoffset="490"/>
+            </svg>
+            <div class="ring-center">
+              <span class="ring-pct" id="ring-pct">0%</span>
+              <span class="ring-label">of daily budget</span>
+            </div>
+          </div>
+          <div class="ring-stats">
+            <div class="ring-stat"><div class="val" id="rs-spent">$0.00</div><div class="lbl">Spent</div></div>
+            <div class="ring-stat"><div class="val" id="rs-remain">$10.00</div><div class="lbl">Remaining</div></div>
+          </div>
+        </div>
+
+        <!-- Metric: Calls Today -->
+        <div class="cell cell-metric">
+          <div class="cell-title">API Calls (24h)</div>
+          <div class="metric-val" id="m-calls">0</div>
+          <div class="metric-sub" id="m-calls-sub">across 0 services</div>
+        </div>
+
+        <!-- Metric: Burn Rate -->
+        <div class="cell cell-metric">
+          <div class="cell-title">Burn Rate</div>
+          <div class="metric-val" id="m-burn">$0.00<span style="font-size:16px;color:var(--fg-3)">/hr</span></div>
+          <div class="metric-sub" id="m-runout">budget is safe</div>
+        </div>
+
+        <!-- Metric: Optimization Score -->
+        <div class="cell cell-metric">
+          <div class="cell-title">Plan Utilization</div>
+          <div class="metric-val" id="m-util">0%</div>
+          <div class="metric-sub" id="m-util-sub">of remaining budget planned</div>
+        </div>
+
+        <!-- Category Breakdown -->
+        <div class="cell cell-cats">
+          <div class="cell-title">Spend by Category</div>
+          <div class="cat-grid" id="cats"><div class="loading">Loading...</div></div>
+        </div>
+
+        <!-- Optimization Plan Summary -->
+        <div class="cell cell-summary">
+          <div class="cell-title">Plan Summary</div>
+          <div class="summary-items" id="plan-summary"><div class="loading">Loading...</div></div>
+        </div>
+
+        <!-- Allocation Table -->
+        <div class="cell cell-alloc">
+          <div class="cell-title">Optimal Allocation (value/$ ranked)</div>
+          <div id="alloc"><div class="loading">Loading...</div></div>
+        </div>
+
+        <!-- Plan Summary #2 -->
+        <div class="cell cell-summary">
+          <div class="cell-title">Top Services by Value</div>
+          <div id="top-services"><div class="loading">Loading...</div></div>
+        </div>
+
+        <!-- Live Feed -->
+        <div class="cell cell-feed">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="cell-title" style="margin-bottom:0">Live Settlements</div>
+            <button id="refresh-feed" style="font-size:12px;padding:5px 12px;border-radius:6px;background:var(--surface-2);border:1px solid var(--border);color:var(--fg-2);cursor:pointer">Refresh</button>
+          </div>
+          <div id="feed"><div class="loading">Loading...</div></div>
+        </div>
+      </div>
+
+      <footer style="text-align:center;color:var(--fg-3);font-size:12px;margin-top:40px">
+        helios_nano budget bot · Arc Testnet · Circle Gateway x402 · greedy value-per-dollar optimization
+      </footer>
+    </div>
+
+    <script>
+      const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "—";
+
+      async function loadBudget() {
+        try {
+          const [budgetRes, optimizeRes] = await Promise.all([
+            fetch("/api/budget"),
+            fetch("/api/budget/optimize"),
+          ]);
+          const state = await budgetRes.json();
+          const { plan } = await optimizeRes.json();
+
+          // Ring
+          const pct = Math.round(state.pctUsed * 100);
+          document.getElementById("ring-pct").textContent = pct + "%";
+          const circ = 490;
+          document.getElementById("ring").style.strokeDashoffset = circ - (circ * state.pctUsed);
+          document.getElementById("rs-spent").textContent = "$" + state.spentToday.toFixed(4);
+          document.getElementById("rs-remain").textContent = "$" + state.remaining.toFixed(4);
+
+          // Update header pill
+          document.querySelector(".pill b").textContent = "$" + state.dailyUsd.toFixed(2);
+
+          // Metrics
+          document.getElementById("m-calls").textContent = state.callsToday.toLocaleString();
+          document.getElementById("m-calls-sub").textContent = "across " + state.byService.length + " services";
+          document.getElementById("m-burn").innerHTML = "$" + state.burnRatePerHour.toFixed(4) + '<span style="font-size:16px;color:var(--fg-3)">/hr</span>';
+          if (state.projectedRunoutHours !== null) {
+            document.getElementById("m-runout").textContent = "depletes in " + state.projectedRunoutHours.toFixed(1) + "h";
+            document.getElementById("m-runout").style.color = state.projectedRunoutHours < 4 ? "var(--red)" : "var(--amber)";
+          } else {
+            document.getElementById("m-runout").textContent = "budget is safe";
+            document.getElementById("m-runout").style.color = "var(--green)";
+          }
+
+          // Plan utilization
+          document.getElementById("m-util").textContent = Math.round(plan.utilization * 100) + "%";
+          document.getElementById("m-util-sub").textContent = "$" + plan.totalCost.toFixed(4) + " planned for " + plan.totalValue + " value";
+
+          // Categories
+          const maxCatSpend = Math.max(...state.byCategory.map(c => c.spent), state.dailyUsd * 0.01);
+          const colors = ["#6366f1", "#2dd4bf", "#60a5fa", "#a78bfa", "#fbbf24", "#f87171", "#34d399", "#f472b6"];
+          const catsHtml = state.byCategory.length > 0
+            ? state.byCategory.map((c, i) => {
+                const pctBar = Math.min(100, (c.spent / maxCatSpend) * 100);
+                return `<div class="cat-item">
+                  <div class="cat-name">${c.key}</div>
+                  <div class="cat-spent">$${c.spent.toFixed(4)}</div>
+                  <div class="cat-calls">${c.calls} calls</div>
+                  <div class="cat-bar"><div class="cat-bar-fill" style="width:${pctBar}%;background:${colors[i % colors.length]}"></div></div>
+                </div>`;
+              }).join("")
+            : '<div class="empty">No spend recorded yet — the bot optimizes when API calls begin.</div>';
+          document.getElementById("cats").innerHTML = catsHtml;
+
+          // Plan summary
+          const summaryHtml = `
+            <div class="summary-row"><span class="lbl">Total planned cost</span><span class="val">$${plan.totalCost.toFixed(4)}</span></div>
+            <div class="summary-row"><span class="lbl">Total planned value</span><span class="val">${plan.totalValue.toLocaleString()}</span></div>
+            <div class="summary-row"><span class="lbl">Services in plan</span><span class="val">${plan.items.length}</span></div>
+            <div class="summary-row"><span class="lbl">Budget utilization</span><span class="val">${Math.round(plan.utilization * 100)}%</span></div>
+            <div class="summary-row"><span class="lbl">Avg value/$</span><span class="val">${plan.totalCost > 0 ? (plan.totalValue / plan.totalCost).toFixed(0) : "—"}</span></div>
+          `;
+          document.getElementById("plan-summary").innerHTML = summaryHtml;
+
+          // Top services by value
+          const topSvcs = [...plan.items].sort((a, b) => b.value - a.value).slice(0, 6);
+          const topHtml = topSvcs.length > 0
+            ? '<div class="summary-items">' + topSvcs.map(i => `
+                <div class="summary-row">
+                  <span class="lbl">${i.service.name}</span>
+                  <span class="val" style="color:var(--teal)">${i.value}</span>
+                </div>`).join("") + '</div>'
+            : '<div class="empty">No plan computed yet.</div>';
+          document.getElementById("top-services").innerHTML = topHtml;
+
+          // Allocation table
+          const maxVal = Math.max(...plan.items.map(i => i.value), 1);
+          const allocHtml = plan.items.length > 0
+            ? `<table class="alloc-table">
+                <thead><tr><th>Service</th><th>Category</th><th>Calls</th><th>Cost</th><th>Value</th><th>Value/$</th></tr></thead>
+                <tbody>${plan.items.slice(0, 15).map(i => `<tr>
+                  <td class="svc">${i.service.name}</td>
+                  <td style="color:var(--fg-3)">${i.service.category}</td>
+                  <td class="mono">${i.calls}</td>
+                  <td class="mono">$${i.cost.toFixed(4)}</td>
+                  <td class="mono">${i.value}<span class="val-bar" style="width:${Math.round(i.value/maxVal*40)}px"></span></td>
+                  <td class="mono vpd">${i.valuePerDollar.toFixed(0)}</td>
+                </tr>`).join("")}</tbody>
+              </table>
+              ${plan.items.length > 15 ? '<div style="color:var(--fg-3);font-size:12px;margin-top:8px">+ ' + (plan.items.length - 15) + ' more services</div>' : ''}`
+            : '<div class="empty">No allocation plan — budget is fully exhausted or catalog is empty.</div>';
+          document.getElementById("alloc").innerHTML = allocHtml;
+
+        } catch (e) {
+          console.error("budget load error:", e);
+          document.getElementById("cats").innerHTML = '<div style="color:var(--red)">Error loading budget data</div>';
+        }
+      }
+
+      async function loadFeed() {
+        try {
+          const r = await fetch("/api/transfers?limit=8");
+          if (!r.ok) throw new Error("api " + r.status);
+          const { transfers } = await r.json();
+          if (!transfers || transfers.length === 0) {
+            document.getElementById("feed").innerHTML = '<div class="empty">No settlements yet — pay the /nano endpoint to see transactions here.</div>';
+            return;
+          }
+          const rows = transfers.map(t => {
+            const usdc = (Number(t.amount) / 1e6).toFixed(6);
+            const when = t.updatedAt ? new Date(t.updatedAt).toLocaleString() : "";
+            const st = t.status || "?";
+            const dotCls = (st === "completed" || st === "confirmed") ? "dot-ok" : st === "failed" ? "dot-err" : "dot-pending";
+            return `<tr>
+              <td><span class="dot ${dotCls}"></span>${st}</td>
+              <td>${usdc} USDC</td>
+              <td>${short(t.fromAddress)}</td>
+              <td>${(t.id||"").slice(0,8)}…</td>
+              <td style="color:var(--fg-3)">${when}</td>
+            </tr>`;
+          }).join("");
+          document.getElementById("feed").innerHTML = `<table class="feed-table"><thead><tr><th>Status</th><th>Amount</th><th>Buyer</th><th>Settlement</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>`;
+        } catch (e) {
+          document.getElementById("feed").innerHTML = '<div style="color:var(--red);font-size:13px">Feed unavailable: ' + e.message + '</div>';
+        }
+      }
+
+      document.getElementById("refresh-feed").onclick = loadFeed;
+
+      loadBudget();
+      loadFeed();
+      setInterval(loadBudget, 30000);
+      setInterval(loadFeed, 15000);
+    </script>
+  </body>
+</html>

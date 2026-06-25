@@ -18,6 +18,9 @@ import { installDohResolver } from "./net.ts";
 import { CircleAgent } from "./agent.ts";
 import { runDoctor, formatDoctor } from "./doctor.ts";
 import { buildConfigFromEnv } from "./env.ts";
+import { Ledger } from "./ledger.ts";
+import { computeBudgetState, optimizeAllocation } from "./budget.ts";
+import { SERVICE_CATALOG } from "./catalog.ts";
 
 installDohResolver();
 
@@ -98,6 +101,46 @@ async function main() {
       printJson(agent.auditLog());
       break;
 
+    case "budget": {
+      const cfg = buildConfig();
+      const daily = Number(process.env.AGENT_MAX_PER_DAY ?? cfg.guardrails.maxPerDay);
+      const entries = new Ledger(cfg.ledgerPath).all();
+      const state = computeBudgetState(daily, entries, SERVICE_CATALOG, Date.now());
+      console.log(`daily budget:   $${state.dailyUsd.toFixed(2)}`);
+      console.log(`spent (24h):    $${state.spentToday.toFixed(6)} (${(state.pctUsed * 100).toFixed(1)}%)`);
+      console.log(`remaining:      $${state.remaining.toFixed(6)}`);
+      console.log(`calls (24h):    ${state.callsToday}`);
+      console.log(`burn rate:      $${state.burnRatePerHour.toFixed(6)}/hr`);
+      console.log(
+        `projected runout: ${state.projectedRunoutHours === null ? "—" : state.projectedRunoutHours.toFixed(1) + "h"}`,
+      );
+      if (state.byCategory.length) {
+        console.log("by category:");
+        for (const c of state.byCategory) console.log(`  ${c.key.padEnd(14)} $${c.spent.toFixed(6)}  ${c.calls} calls`);
+      }
+      break;
+    }
+
+    case "optimize": {
+      const cfg = buildConfig();
+      const daily = Number(process.env.AGENT_MAX_PER_DAY ?? cfg.guardrails.maxPerDay);
+      const entries = new Ledger(cfg.ledgerPath).all();
+      const state = computeBudgetState(daily, entries, SERVICE_CATALOG, Date.now());
+      const plan = optimizeAllocation(state.remaining, SERVICE_CATALOG);
+      console.log(`optimizing $${state.remaining.toFixed(4)} remaining across ${SERVICE_CATALOG.length} services:\n`);
+      console.log("  calls   cost      value  value/$  service");
+      for (const i of plan.items) {
+        console.log(
+          `  ${String(i.calls).padStart(5)}  $${i.cost.toFixed(4).padStart(7)}  ${String(i.value).padStart(5)}  ${i.valuePerDollar.toFixed(0).padStart(6)}  ${i.service.name}`,
+        );
+      }
+      console.log(
+        `\n  plan: $${plan.totalCost.toFixed(4)} for ${plan.totalValue} value ` +
+          `(${(plan.utilization * 100).toFixed(0)}% of remaining budget)`,
+      );
+      break;
+    }
+
     default:
       console.log(
         [
@@ -113,6 +156,8 @@ async function main() {
           "  skills                 list agent skills",
           "  skill <name> <json>    run a skill",
           "  audit                  dump the audit ledger",
+          "  budget                 show daily budget state (spend, remaining, burn rate)",
+          "  optimize               compute optimal spend allocation across all services",
         ].join("\n"),
       );
   }

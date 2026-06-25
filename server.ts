@@ -3,6 +3,10 @@ import { installDohResolver } from "./agent/net.ts";
 import { createGatewayMiddleware } from "@circle-fin/x402-batching/server";
 import { formatUnits } from "viem";
 import { decodeBatch } from "./decode-batch.ts";
+import { buildConfigFromEnv } from "./agent/env.ts";
+import { Ledger } from "./agent/ledger.ts";
+import { computeBudgetState, optimizeAllocation } from "./agent/budget.ts";
+import { SERVICE_CATALOG } from "./agent/catalog.ts";
 
 // Bypass ISP DNS hijacking of *.circle.com (resolve the facilitator via DoH).
 installDohResolver();
@@ -26,7 +30,7 @@ const app = express();
 // The paywalled routes return 402, so a dedicated 200 endpoint is needed.
 app.get("/health", (_req, res) => res.json({ status: "ok", seller: SELLER }));
 
-app.get("/", (_req, res) => res.redirect("/dashboard.html"));
+app.get("/", (_req, res) => res.redirect("/budget.html"));
 app.use(express.static("public"));
 
 // Read-only status for the dashboard. No secrets — just public seller config.
@@ -166,6 +170,28 @@ app.get("/api/batch-tx/:id", async (req, res) => {
     status: settlement.status,
     explorerUrl: candidate ? `${ARC_EXPLORER}/tx/${candidate.hash}` : null,
   });
+});
+
+// Budget bot API — powers the Bento Grid dashboard
+app.get("/api/budget", (_req, res) => {
+  const cfg = buildConfigFromEnv();
+  const daily = Number(process.env.AGENT_MAX_PER_DAY ?? cfg.guardrails.maxPerDay);
+  const entries = new Ledger(cfg.ledgerPath).all();
+  const state = computeBudgetState(daily, entries, SERVICE_CATALOG, Date.now());
+  res.json(state);
+});
+
+app.get("/api/budget/optimize", (_req, res) => {
+  const cfg = buildConfigFromEnv();
+  const daily = Number(process.env.AGENT_MAX_PER_DAY ?? cfg.guardrails.maxPerDay);
+  const entries = new Ledger(cfg.ledgerPath).all();
+  const state = computeBudgetState(daily, entries, SERVICE_CATALOG, Date.now());
+  const plan = optimizeAllocation(state.remaining, SERVICE_CATALOG);
+  res.json({ state, plan });
+});
+
+app.get("/api/budget/catalog", (_req, res) => {
+  res.json(SERVICE_CATALOG);
 });
 
 const PORT = Number(process.env.PORT ?? 3000);
