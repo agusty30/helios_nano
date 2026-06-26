@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -8,8 +8,9 @@ import { useApi } from "@/lib/useApi";
 import { commandSuggestions, timelineEvents, agents } from "@/lib/mock-data";
 import type { CanvasMetrics, AgentRouteResponse } from "@/lib/types";
 import {
-  Send, Sparkles, CheckCircle2, Clock, Loader2, Bot, ChevronRight,
+  Send, Sparkles, CheckCircle2, Clock, Loader2, Bot, XCircle,
   CreditCard, ShoppingCart, Landmark, Wallet, Wifi, WifiOff,
+  Play, ListChecks, ChevronDown, ChevronUp, Terminal,
 } from "lucide-react";
 
 const agentIcon: Record<string, React.FC<{ size?: number; className?: string }>> = {
@@ -31,23 +32,86 @@ const MOCK_CANVAS: CanvasMetrics = {
   requests_today: 1847, budget_remaining: 7.16, circuit_breaker: false, chain: "Arc Testnet (5042002)",
 };
 
+interface TaskStep {
+  step: number;
+  action: string;
+  status: string;
+  detail: string;
+}
+
+interface TaskRecord {
+  id: string;
+  command: string;
+  commandType: string;
+  status: string;
+  steps: TaskStep[];
+  result: Record<string, unknown> | null;
+  executionTimeMs: number | null;
+  createdAt: string;
+}
+
 export default function MissionControlPage() {
   const [command, setCommand] = useState("");
   const [sending, setSending] = useState(false);
   const [responses, setResponses] = useState<AgentRouteResponse[]>([]);
+  const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [mode, setMode] = useState<"agent" | "task">("task");
 
   const fetchMetrics = useCallback(() => api.fetchCanvasMetrics(), []);
   const metrics = useApi(fetchMetrics, MOCK_CANVAS, 10000);
 
+  useEffect(() => {
+    fetch("/api/tasks?limit=20")
+      .then((r) => (r.ok ? r.json() : { tasks: [] }))
+      .then((data) => setTasks(data.tasks || []))
+      .catch(() => {});
+  }, []);
+
   const handleSubmit = async () => {
     if (!command.trim() || sending) return;
     setSending(true);
-    const result = await api.postAgentRoute(command, "low");
-    if (result) {
-      setResponses((prev) => [result, ...prev]);
+
+    if (mode === "task") {
+      try {
+        const res = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command }),
+        });
+        const data = await res.json();
+        if (data.task) {
+          setTasks((prev) => [data.task, ...prev]);
+          setExpandedTask(data.task.id);
+        }
+      } catch {}
+    } else {
+      const result = await api.postAgentRoute(command, "low");
+      if (result) {
+        setResponses((prev) => [result, ...prev]);
+      }
     }
+
     setSending(false);
     setCommand("");
+  };
+
+  const taskStatusColor = (status: string) => {
+    switch (status) {
+      case "COMPLETED": return "text-success";
+      case "FAILED": return "text-danger";
+      case "RUNNING": return "text-primary-light";
+      default: return "text-muted-dark";
+    }
+  };
+
+  const taskStatusIcon = (status: string) => {
+    switch (status) {
+      case "COMPLETED": return CheckCircle2;
+      case "FAILED": return XCircle;
+      case "RUNNING": return Loader2;
+      default: return Clock;
+    }
   };
 
   return (
@@ -72,9 +136,27 @@ export default function MissionControlPage() {
         animate={{ opacity: 1, y: 0 }}
         className="glass-bright rounded-xl p-6"
       >
-        <div className="flex items-center gap-3 mb-4">
-          <Sparkles size={16} className="text-primary-light" />
-          <span className="text-sm font-semibold text-foreground">AI Command Center</span>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Sparkles size={16} className="text-primary-light" />
+            <span className="text-sm font-semibold text-foreground">AI Command Center</span>
+          </div>
+          <div className="flex items-center gap-1 bg-surface-bright rounded-lg p-0.5">
+            <button
+              onClick={() => setMode("task")}
+              className={cn("px-3 py-1 rounded-md text-[11px] font-medium transition-colors",
+                mode === "task" ? "bg-primary text-white" : "text-muted-dark hover:text-foreground")}
+            >
+              <Terminal size={10} className="inline mr-1" /> Task
+            </button>
+            <button
+              onClick={() => setMode("agent")}
+              className={cn("px-3 py-1 rounded-md text-[11px] font-medium transition-colors",
+                mode === "agent" ? "bg-primary text-white" : "text-muted-dark hover:text-foreground")}
+            >
+              <Bot size={10} className="inline mr-1" /> Agent
+            </button>
+          </div>
         </div>
         <div className="relative">
           <input
@@ -82,7 +164,7 @@ export default function MissionControlPage() {
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-            placeholder="Tell HeliOS what to do..."
+            placeholder={mode === "task" ? "Run a task: 'run tests', 'check status', 'optimize costs'..." : "Tell HeliOS what to do..."}
             className="w-full bg-bg border border-border rounded-xl px-4 py-3.5 text-sm text-foreground placeholder-muted-dark focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
           />
           <button
@@ -94,7 +176,10 @@ export default function MissionControlPage() {
           </button>
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
-          {commandSuggestions.map((s) => (
+          {(mode === "task"
+            ? ["Run tests", "Check status", "Optimize costs", "Allocate budget $10"]
+            : commandSuggestions
+          ).map((s) => (
             <button
               key={s}
               onClick={() => setCommand(s)}
@@ -106,7 +191,62 @@ export default function MissionControlPage() {
         </div>
       </motion.div>
 
-      {/* Live responses */}
+      {/* Task history */}
+      {tasks.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-bright rounded-xl p-6"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <ListChecks size={16} className="text-primary-light" />
+            <h3 className="text-sm font-semibold text-foreground">Task History</h3>
+            <span className="text-[10px] text-muted-dark ml-auto">{tasks.length} tasks</span>
+          </div>
+          <div className="space-y-2">
+            {tasks.map((task) => {
+              const Icon = taskStatusIcon(task.status);
+              const isExpanded = expandedTask === task.id;
+              return (
+                <div key={task.id} className="rounded-lg bg-white/[0.02] border border-border overflow-hidden">
+                  <button
+                    onClick={() => setExpandedTask(isExpanded ? null : task.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
+                  >
+                    <Icon size={14} className={cn(taskStatusColor(task.status), task.status === "RUNNING" && "animate-spin")} />
+                    <span className="text-[12px] font-medium text-foreground flex-1 truncate">{task.command}</span>
+                    <span className="text-[10px] text-muted-dark font-mono">{task.commandType}</span>
+                    {task.executionTimeMs !== null && (
+                      <span className="text-[10px] text-muted-dark">{task.executionTimeMs}ms</span>
+                    )}
+                    {isExpanded ? <ChevronUp size={12} className="text-muted-dark" /> : <ChevronDown size={12} className="text-muted-dark" />}
+                  </button>
+                  {isExpanded && (
+                    <div className="px-4 pb-3 border-t border-border/50">
+                      <div className="mt-3 space-y-1.5">
+                        {(task.steps as TaskStep[]).map((step) => (
+                          <div key={step.step} className="flex items-start gap-2">
+                            <div className={cn("mt-0.5 w-1.5 h-1.5 rounded-full shrink-0",
+                              step.status === "completed" ? "bg-success" : step.status === "failed" ? "bg-danger" : "bg-primary-light")} />
+                            <span className="text-[11px] text-muted">{step.detail}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {task.result && (
+                        <div className="mt-3 p-2 rounded-md bg-bg text-[10px] font-mono text-muted-dark">
+                          {JSON.stringify(task.result, null, 2)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Live LLM responses */}
       {responses.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -185,7 +325,7 @@ export default function MissionControlPage() {
           </motion.div>
         </div>
 
-        {/* Active agents with live metrics */}
+        {/* Active agents */}
         <div>
           <motion.div
             initial={{ opacity: 0, y: 16 }}

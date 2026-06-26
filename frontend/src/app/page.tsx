@@ -3,6 +3,7 @@
 import { useMemo, useCallback } from "react";
 import KpiCards from "@/components/dashboard/KpiCards";
 import TractionBanner from "@/components/dashboard/TractionBanner";
+import TreasuryPanel from "@/components/dashboard/TreasuryPanel";
 import SpendingChart from "@/components/dashboard/SpendingChart";
 import CostBreakdownChart from "@/components/dashboard/CostBreakdownChart";
 import RecentTransactions from "@/components/dashboard/RecentTransactions";
@@ -96,6 +97,7 @@ export default function DashboardPage() {
       </div>
 
       <TractionBanner data={liveTraction} />
+      <TreasuryPanel />
       <KpiCards data={liveKpis} />
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

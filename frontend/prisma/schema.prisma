@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  FINANCE
+  VIEWER
+}
+
+enum WalletType {
+  TREASURY
+  AGENT
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  industry  String   @default("")
+  timezone  String   @default("America/Los_Angeles (UTC-8)")
+  currency  String   @default("USDC")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  wallets         Wallet[]
+  agents          Agent[]
+  apiKeys         ApiKeyRecord[]
+  paymentPolicies PaymentPolicy[]
+  auditLogs       AuditLog[]
+  tasks           Task[]
+  transactions    Transaction[]
+  settings        Setting[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  orgId        String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(VIEWER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  auditLogs AuditLog[]
+
+  @@index([orgId])
+}
+
+model Wallet {
+  id        String     @id @default(cuid())
+  orgId     String
+  label     String
+  address   String
+  type      WalletType
+  chain     String     @default("Arc Testnet")
+  network   String     @default("eip155:5042002")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agents       Agent[]
+  transactions Transaction[]
+
+  @@index([orgId])
+}
+
+model Agent {
+  id        String   @id @default(cuid())
+  orgId     String
+  walletId  String?
+  name      String
+  type      String
+  status    String   @default("active")
+  config    Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  wallet Wallet?      @relation(fields: [walletId], references: [id])
+  tasks  Task[]
+
+  @@index([orgId])
+}
+
+model ApiKeyRecord {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  keyHash     String
+  prefix      String
+  permissions String[] @default([])
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model PaymentPolicy {
+  id                    String  @id @default(cuid())
+  orgId                 String  @unique
+  autoApproveThreshold  Float   @default(500)
+  dailyLimit            Float   @default(10)
+  agentLimit            Float   @default(1000)
+  require2fa            Boolean @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  orgId     String
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, key])
+  @@index([orgId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User?        @relation(fields: [userId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@index([entity, entityId])
+}
+
+model Task {
+  id              String     @id @default(cuid())
+  orgId           String
+  agentId         String?
+  agentName       String     @default("HeliOS")
+  command         String
+  commandType     String     @default("general")
+  status          TaskStatus @default(PENDING)
+  steps           Json       @default("[]")
+  result          Json?
+  logs            Json       @default("[]")
+  cost            Float      @default(0)
+  executionTimeMs Int?
+  createdAt       DateTime   @default(now())
+  completedAt     DateTime?
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent Agent?       @relation(fields: [agentId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@index([status])
+}
+
+model Transaction {
+  id        String            @id @default(cuid())
+  orgId     String
+  walletId  String?
+  type      String
+  amount    Float
+  currency  String            @default("USDC")
+  status    TransactionStatus @default(PENDING)
+  reference String?
+  metadata  Json              @default("{}")
+  createdAt DateTime          @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  wallet Wallet?      @relation(fields: [walletId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@index([walletId])
+}

@@ -19,6 +19,7 @@ const nav = [
   { type: "divider" as const, label: "Operations" },
   { label: "Transactions", href: "/transactions", icon: ArrowRightLeft },
   { label: "Approvals", href: "/approvals", icon: CheckCircle2 },
+  { label: "Wallets", href: "/wallets", icon: Wallet },
   { label: "Budgets", href: "/budgets", icon: PieChart },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
   { label: "Reports", href: "/reports", icon: FileText },

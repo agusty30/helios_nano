@@ -181,3 +181,65 @@ export interface GatewayTransfer {
 export interface TransferResponse {
   transfers: GatewayTransfer[];
 }
+
+// --- DB entity types ---
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: "ADMIN" | "FINANCE" | "VIEWER";
+  orgId: string;
+}
+
+export interface OrganizationRecord {
+  id: string;
+  name: string;
+  industry: string;
+  timezone: string;
+  currency: string;
+  updatedAt: string;
+}
+
+export interface WalletRecord {
+  id: string;
+  label: string;
+  address: string;
+  type: "TREASURY" | "AGENT";
+  chain: string;
+  network: string;
+  createdAt: string;
+}
+
+export interface TaskRecord {
+  id: string;
+  command: string;
+  commandType: string;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  steps: Array<{ step: number; action: string; status: string; detail: string }>;
+  result: Record<string, unknown> | null;
+  cost: number;
+  executionTimeMs: number | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  userId: string | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  before: unknown;
+  after: unknown;
+  createdAt: string;
+  user?: { name: string; email: string };
+}
+
+export interface PaymentPolicyRecord {
+  id: string;
+  autoApproveThreshold: number;
+  dailyLimit: number;
+  agentLimit: number;
+  require2fa: boolean;
+}
