@@ -82,7 +82,7 @@ export default function MissionControlPage() {
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-            placeholder="Tell BudgetBot what to do..."
+            placeholder="Tell HeliOS what to do..."
             className="w-full bg-bg border border-border rounded-xl px-4 py-3.5 text-sm text-foreground placeholder-muted-dark focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
           />
           <button

@@ -3,7 +3,7 @@ import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
 
 export const metadata: Metadata = {
-  title: "BudgetBot — Autonomous AI Financial Operating System",
+  title: "HeliOS — Autonomous AI Financial Operating System",
   description: "AI-native platform for budgeting, procurement, and autonomous payments",
 };
 

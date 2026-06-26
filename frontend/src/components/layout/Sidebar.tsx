@@ -41,7 +41,7 @@ export default function Sidebar() {
             </div>
           </div>
           <div>
-            <span className="text-[15px] font-bold tracking-tight text-foreground">BudgetBot</span>
+            <span className="text-[15px] font-bold tracking-tight text-foreground">HeliOS</span>
             <span className="block text-[9px] text-muted-dark font-medium uppercase tracking-[0.15em]">AI Financial OS</span>
           </div>
         </Link>
