@@ -2,12 +2,10 @@
 
 import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { useRouter } from "next/navigation";
 import { Hexagon, Bot, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const { login, register } = useAuth();
-  const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -32,7 +30,7 @@ export default function LoginPage() {
       setError(result.error);
       setLoading(false);
     } else {
-      router.push("/");
+      window.location.href = "/";
     }
   };
 
