@@ -1,13 +1,17 @@
 "use client";
 
+import { useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { formatCurrency } from "@/lib/utils";
+import { api } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 import { spendingData, costBreakdown, budgets, tractionMetrics } from "@/lib/mock-data";
+import type { BudgetStateResponse, CanvasMetrics } from "@/lib/types";
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { TrendingDown, Zap, Shield, PiggyBank } from "lucide-react";
+import { TrendingDown, Zap, Shield, PiggyBank, Wifi, WifiOff } from "lucide-react";
 
 const savingsData = spendingData.map((d) => ({
   month: d.month,
@@ -15,20 +19,56 @@ const savingsData = spendingData.map((d) => ({
   aiSavings: d.actual - d.optimized,
 }));
 
+const MOCK_BUDGET: BudgetStateResponse = {
+  dailyUsd: 10, spentToday: 0, remaining: 10, pctUsed: 0,
+  callsToday: 0, burnRatePerHour: 0, projectedRunoutHours: null,
+  byCategory: [], byService: [],
+};
+
+const MOCK_CANVAS: CanvasMetrics = {
+  wallet_address: "0x...", usdc_balance: 7.16, active_throughput: 0,
+  last_route: "cheap_tier", daily_spend: 2.84, total_saved: 42.38,
+  requests_today: 1847, budget_remaining: 7.16, circuit_breaker: false, chain: "Arc Testnet (5042002)",
+};
+
 export default function AnalyticsPage() {
+  const fetchBudget = useCallback(() => api.fetchBudgetState(), []);
+  const fetchMetrics = useCallback(() => api.fetchCanvasMetrics(), []);
+  const budget = useApi(fetchBudget, MOCK_BUDGET, 15000);
+  const metrics = useApi(fetchMetrics, MOCK_CANVAS, 10000);
+
+  const anyLive = budget.isLive || metrics.isLive;
+
+  const liveTraction = useMemo(() => {
+    const m = metrics.data;
+    if (!metrics.isLive) return tractionMetrics;
+    return {
+      totalAutonomousPayments: m.requests_today,
+      avgTransactionSize: m.daily_spend > 0 && m.requests_today > 0 ? m.daily_spend / m.requests_today : 0.0042,
+      budgetUtilizationEfficiency: ((m.daily_spend / (m.daily_spend + m.budget_remaining)) * 100) || 0,
+      costPerTaskCompleted: m.daily_spend > 0 && m.requests_today > 0 ? m.daily_spend / m.requests_today : 0.0018,
+    };
+  }, [metrics.data, metrics.isLive]);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
-        <p className="text-sm text-muted-dark mt-1">Executive insights and AI-driven financial intelligence</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+          <p className="text-sm text-muted-dark mt-1">Executive insights and AI-driven financial intelligence</p>
+        </div>
+        {anyLive ? (
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-success"><Wifi size={12} /> Live</span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Demo</span>
+        )}
       </div>
 
-      {/* Insight cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Monthly Savings", value: "$56,000", sub: "vs allocated budget", icon: PiggyBank, color: "text-success" },
-          { label: "AI Optimization", value: "$26,000", sub: "additional savings from AI", icon: Zap, color: "text-primary-light" },
-          { label: "Cost Reduction", value: "16.5%", sub: "month-over-month", icon: TrendingDown, color: "text-success" },
+          { label: "Monthly Savings", value: budget.isLive ? formatCurrency(budget.data.remaining) : "$56,000", sub: budget.isLive ? "remaining daily budget" : "vs allocated budget", icon: PiggyBank, color: "text-success" },
+          { label: "AI Optimization", value: metrics.isLive ? formatCurrency(metrics.data.total_saved) : "$26,000", sub: metrics.isLive ? "total savings from routing" : "additional savings from AI", icon: Zap, color: "text-primary-light" },
+          { label: "Cost Reduction", value: budget.isLive ? `${(budget.data.pctUsed * 100).toFixed(1)}%` : "16.5%", sub: budget.isLive ? "budget utilization" : "month-over-month", icon: TrendingDown, color: "text-success" },
           { label: "Compliance Score", value: "98.7%", sub: "all policies met", icon: Shield, color: "text-primary-light" },
         ].map((card, i) => (
           <motion.div
@@ -48,9 +88,7 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Savings trend */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -79,7 +117,6 @@ export default function AnalyticsPage() {
           </div>
         </motion.div>
 
-        {/* Department efficiency */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -111,7 +148,6 @@ export default function AnalyticsPage() {
         </motion.div>
       </div>
 
-      {/* AI performance */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -122,10 +158,10 @@ export default function AnalyticsPage() {
         <p className="text-[11px] text-muted-dark mb-5">Key traction metrics for autonomous operations</p>
         <div className="grid grid-cols-4 gap-6">
           {[
-            { label: "Autonomous Payments", value: tractionMetrics.totalAutonomousPayments.toLocaleString(), detail: "Total processed" },
-            { label: "Avg Tx Size", value: `$${tractionMetrics.avgTransactionSize.toFixed(4)}`, detail: "Sub-cent target achieved" },
-            { label: "Budget Utilization", value: `${tractionMetrics.budgetUtilizationEfficiency}%`, detail: "Allocation efficiency" },
-            { label: "Cost / Task", value: `$${tractionMetrics.costPerTaskCompleted.toFixed(4)}`, detail: "Per completed operation" },
+            { label: "Autonomous Payments", value: liveTraction.totalAutonomousPayments.toLocaleString(), detail: "Total processed" },
+            { label: "Avg Tx Size", value: `$${liveTraction.avgTransactionSize.toFixed(4)}`, detail: "Sub-cent target achieved" },
+            { label: "Budget Utilization", value: `${liveTraction.budgetUtilizationEfficiency.toFixed(1)}%`, detail: "Allocation efficiency" },
+            { label: "Cost / Task", value: `$${liveTraction.costPerTaskCompleted.toFixed(4)}`, detail: "Per completed operation" },
           ].map((m) => (
             <div key={m.label} className="text-center p-4 rounded-lg bg-white/[0.02] border border-border">
               <span className="text-2xl font-bold text-foreground">{m.value}</span>

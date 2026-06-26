@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { cn, formatCurrency } from "@/lib/utils";
+import { api } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 import { transactions } from "@/lib/mock-data";
-import { Search, Filter, Download, ArrowUpDown } from "lucide-react";
+import type { TransferResponse, Transaction } from "@/lib/types";
+import { Search, Download, ArrowUpDown, Wifi, WifiOff } from "lucide-react";
 
 const statusStyle: Record<string, string> = {
   completed: "bg-success/10 text-success",
@@ -12,11 +15,29 @@ const statusStyle: Record<string, string> = {
   failed: "bg-danger/10 text-danger",
 };
 
+const MOCK_TRANSFERS: TransferResponse = { transfers: [] };
+
 export default function TransactionsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const filtered = transactions.filter((tx) => {
+  const fetchTransfers = useCallback(() => api.fetchTransfers(50), []);
+  const transfers = useApi(fetchTransfers, MOCK_TRANSFERS, 15000);
+
+  const allTx: Transaction[] = useMemo(() => {
+    if (!transfers.isLive || transfers.data.transfers.length === 0) return transactions;
+    return transfers.data.transfers.map((t, i) => ({
+      id: t.id.length > 10 ? t.id.slice(0, 8).toUpperCase() : t.id,
+      vendor: `x402 Settlement`,
+      amount: parseFloat(t.amount) / 1_000_000,
+      status: (t.status === "completed" || t.status === "confirmed" ? "completed" : t.status === "failed" ? "failed" : "pending") as Transaction["status"],
+      agent: "Payment Agent",
+      category: "x402",
+      timestamp: new Date(t.createdAt).toLocaleString(),
+    }));
+  }, [transfers.data, transfers.isLive]);
+
+  const filtered = allTx.filter((tx) => {
     const matchSearch = tx.vendor.toLowerCase().includes(search.toLowerCase()) ||
       tx.id.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || tx.status === statusFilter;
@@ -30,12 +51,18 @@ export default function TransactionsPage() {
           <h1 className="text-2xl font-bold text-foreground">Transactions</h1>
           <p className="text-sm text-muted-dark mt-1">Complete history of autonomous payments and settlements</p>
         </div>
-        <button className="flex items-center gap-2 text-[12px] font-medium text-muted hover:text-foreground px-4 py-2 rounded-lg border border-border hover:border-primary/30 transition-all">
-          <Download size={14} /> Export CSV
-        </button>
+        <div className="flex items-center gap-3">
+          {transfers.isLive ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-success"><Wifi size={12} /> Live</span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Demo</span>
+          )}
+          <button className="flex items-center gap-2 text-[12px] font-medium text-muted hover:text-foreground px-4 py-2 rounded-lg border border-border hover:border-primary/30 transition-all">
+            <Download size={14} /> Export CSV
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -69,7 +96,6 @@ export default function TransactionsPage() {
         </div>
       </motion.div>
 
-      {/* Table */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}

@@ -1,32 +1,69 @@
 "use client";
 
+import { useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { cn, formatCurrency } from "@/lib/utils";
+import { api } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 import { agents } from "@/lib/mock-data";
+import type { CanvasMetrics } from "@/lib/types";
 import {
   CreditCard, ShoppingCart, Landmark, Wallet, Bot,
-  Activity, CheckCircle2, TrendingUp, Zap,
+  Activity, CheckCircle2, TrendingUp, Zap, Wifi, WifiOff,
 } from "lucide-react";
 
 const iconMap: Record<string, React.FC<{ size?: number; className?: string }>> = {
   CreditCard, ShoppingCart, Landmark, Wallet,
 };
 
+const MOCK_CANVAS: CanvasMetrics = {
+  wallet_address: "0x...", usdc_balance: 7.16, active_throughput: 0,
+  last_route: "cheap_tier", daily_spend: 2.84, total_saved: 42.38,
+  requests_today: 1847, budget_remaining: 7.16, circuit_breaker: false, chain: "Arc Testnet (5042002)",
+};
+
 export default function AgentsPage() {
+  const fetchMetrics = useCallback(() => api.fetchCanvasMetrics(), []);
+  const metrics = useApi(fetchMetrics, MOCK_CANVAS, 10000);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">AI Agents</h1>
-        <p className="text-sm text-muted-dark mt-1">Monitor and manage your autonomous financial agents</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">AI Agents</h1>
+          <p className="text-sm text-muted-dark mt-1">Monitor and manage your autonomous financial agents</p>
+        </div>
+        {metrics.isLive ? (
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-success"><Wifi size={12} /> Live</span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Demo</span>
+        )}
       </div>
 
-      {/* Agent summary */}
+      {/* Live routing metrics */}
+      {metrics.isLive && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary/20 via-primary/10 to-transparent border border-primary/20 p-5"
+        >
+          <div className="grid grid-cols-6 gap-4 text-center">
+            <div><span className="text-[10px] text-muted-dark block">Wallet</span><span className="text-[11px] font-mono text-foreground">{metrics.data.wallet_address.slice(0, 6)}...{metrics.data.wallet_address.slice(-4)}</span></div>
+            <div><span className="text-[10px] text-muted-dark block">USDC Balance</span><span className="text-sm font-bold text-foreground">${metrics.data.usdc_balance.toFixed(4)}</span></div>
+            <div><span className="text-[10px] text-muted-dark block">Throughput</span><span className="text-sm font-bold text-foreground">{metrics.data.active_throughput}/s</span></div>
+            <div><span className="text-[10px] text-muted-dark block">Requests Today</span><span className="text-sm font-bold text-foreground">{metrics.data.requests_today}</span></div>
+            <div><span className="text-[10px] text-muted-dark block">Total Saved</span><span className="text-sm font-bold text-success">${metrics.data.total_saved.toFixed(4)}</span></div>
+            <div><span className="text-[10px] text-muted-dark block">Circuit Breaker</span><span className={cn("text-sm font-bold", metrics.data.circuit_breaker ? "text-danger" : "text-success")}>{metrics.data.circuit_breaker ? "TRIPPED" : "OK"}</span></div>
+          </div>
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-4 gap-4">
         {[
           { label: "Total Agents", value: "4", icon: Bot, color: "text-primary-light" },
-          { label: "Active Now", value: "4/4", icon: Activity, color: "text-success" },
+          { label: "Active Now", value: metrics.data.circuit_breaker ? "0/4" : "4/4", icon: Activity, color: metrics.data.circuit_breaker ? "text-danger" : "text-success" },
           { label: "Avg Success Rate", value: "97.9%", icon: CheckCircle2, color: "text-success" },
-          { label: "Total Savings", value: "$64,100", icon: TrendingUp, color: "text-primary-light" },
+          { label: "Total Savings", value: metrics.isLive ? formatCurrency(metrics.data.total_saved) : "$64,100", icon: TrendingUp, color: "text-primary-light" },
         ].map((s, i) => (
           <motion.div
             key={s.label}
@@ -44,7 +81,6 @@ export default function AgentsPage() {
         ))}
       </div>
 
-      {/* Agent cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {agents.map((agent, i) => {
           const Icon = iconMap[agent.icon] || Bot;
@@ -99,10 +135,7 @@ export default function AgentsPage() {
               </div>
 
               <div className="mt-4 w-full bg-white/5 rounded-full h-1.5">
-                <div
-                  className="bg-gradient-to-r from-primary to-primary-light h-1.5 rounded-full transition-all"
-                  style={{ width: `${agent.successRate}%` }}
-                />
+                <div className="bg-gradient-to-r from-primary to-primary-light h-1.5 rounded-full transition-all" style={{ width: `${agent.successRate}%` }} />
               </div>
             </motion.div>
           );

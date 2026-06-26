@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 import { commandSuggestions, timelineEvents, agents } from "@/lib/mock-data";
+import type { CanvasMetrics, AgentRouteResponse } from "@/lib/types";
 import {
   Send, Sparkles, CheckCircle2, Clock, Loader2, Bot, ChevronRight,
-  CreditCard, ShoppingCart, Landmark, Wallet,
+  CreditCard, ShoppingCart, Landmark, Wallet, Wifi, WifiOff,
 } from "lucide-react";
 
 const agentIcon: Record<string, React.FC<{ size?: number; className?: string }>> = {
@@ -22,14 +25,45 @@ const statusIcon: Record<string, React.FC<{ size?: number; className?: string }>
   pending: Clock,
 };
 
+const MOCK_CANVAS: CanvasMetrics = {
+  wallet_address: "0x...", usdc_balance: 7.16, active_throughput: 0,
+  last_route: "cheap_tier", daily_spend: 2.84, total_saved: 42.38,
+  requests_today: 1847, budget_remaining: 7.16, circuit_breaker: false, chain: "Arc Testnet (5042002)",
+};
+
 export default function MissionControlPage() {
   const [command, setCommand] = useState("");
+  const [sending, setSending] = useState(false);
+  const [responses, setResponses] = useState<AgentRouteResponse[]>([]);
+
+  const fetchMetrics = useCallback(() => api.fetchCanvasMetrics(), []);
+  const metrics = useApi(fetchMetrics, MOCK_CANVAS, 10000);
+
+  const handleSubmit = async () => {
+    if (!command.trim() || sending) return;
+    setSending(true);
+    const result = await api.postAgentRoute(command, "low");
+    if (result) {
+      setResponses((prev) => [result, ...prev]);
+    }
+    setSending(false);
+    setCommand("");
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Mission Control</h1>
-        <p className="text-sm text-muted-dark mt-1">Command your AI agents — natural language operations center</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Mission Control</h1>
+          <p className="text-sm text-muted-dark mt-1">Command your AI agents — natural language operations center</p>
+        </div>
+        <div className="flex items-center gap-2 text-[11px] font-medium">
+          {metrics.isLive ? (
+            <span className="flex items-center gap-1.5 text-success"><Wifi size={12} /> Live</span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-muted-dark"><WifiOff size={12} /> Demo</span>
+          )}
+        </div>
       </div>
 
       {/* Command input */}
@@ -47,11 +81,16 @@ export default function MissionControlPage() {
             type="text"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             placeholder="Tell BudgetBot what to do..."
             className="w-full bg-bg border border-border rounded-xl px-4 py-3.5 text-sm text-foreground placeholder-muted-dark focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
           />
-          <button className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary hover:bg-primary/80 transition-colors">
-            <Send size={14} className="text-white" />
+          <button
+            onClick={handleSubmit}
+            disabled={sending}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary hover:bg-primary/80 transition-colors disabled:opacity-50"
+          >
+            {sending ? <Loader2 size={14} className="text-white animate-spin" /> : <Send size={14} className="text-white" />}
           </button>
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
@@ -66,6 +105,30 @@ export default function MissionControlPage() {
           ))}
         </div>
       </motion.div>
+
+      {/* Live responses */}
+      {responses.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-bright rounded-xl p-6"
+        >
+          <h3 className="text-sm font-semibold text-foreground mb-4">Agent Responses</h3>
+          <div className="space-y-3">
+            {responses.map((r, i) => (
+              <div key={i} className="p-4 rounded-lg bg-white/[0.02] border border-border">
+                <div className="flex items-center gap-3 mb-2">
+                  <Bot size={14} className="text-primary-light" />
+                  <span className="text-[12px] font-semibold text-foreground">{r.model_used}</span>
+                  <span className="text-[10px] text-muted-dark font-mono">{r.route} · ${r.cost.toFixed(4)}</span>
+                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-success/10 text-success font-semibold uppercase">{r.settlement}</span>
+                </div>
+                <p className="text-[13px] text-muted leading-relaxed">{r.response}</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Timeline */}
@@ -122,7 +185,7 @@ export default function MissionControlPage() {
           </motion.div>
         </div>
 
-        {/* Active agents */}
+        {/* Active agents with live metrics */}
         <div>
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -130,7 +193,17 @@ export default function MissionControlPage() {
             transition={{ delay: 0.15 }}
             className="glass-bright rounded-xl p-6"
           >
-            <h3 className="text-sm font-semibold text-foreground mb-5">Active Agents</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-3">Active Agents</h3>
+            {metrics.isLive && (
+              <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <div className="grid grid-cols-2 gap-3 text-[10px]">
+                  <div><span className="text-muted-dark">Throughput</span><br/><span className="text-foreground font-semibold">{metrics.data.active_throughput}/s</span></div>
+                  <div><span className="text-muted-dark">Last Route</span><br/><span className="text-foreground font-semibold">{metrics.data.last_route}</span></div>
+                  <div><span className="text-muted-dark">Spend Today</span><br/><span className="text-foreground font-semibold">${metrics.data.daily_spend.toFixed(4)}</span></div>
+                  <div><span className="text-muted-dark">Saved</span><br/><span className="text-success font-semibold">${metrics.data.total_saved.toFixed(4)}</span></div>
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               {agents.map((a) => {
                 const Icon = agentIcon[a.name] || Bot;
