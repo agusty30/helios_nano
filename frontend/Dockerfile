@@ -31,14 +31,17 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-# Prisma client + schema needed at runtime
+# Prisma client + CLI + schema needed at runtime
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/prisma ./prisma
+
+# Startup script: push schema then start server
+RUN echo '#!/bin/sh\necho "Running Prisma db push..."\nnode node_modules/prisma/build/index.js db push --skip-generate --accept-data-loss 2>&1 || echo "Warning: db push failed, starting anyway"\necho "Starting HeliOS server..."\nnode server.js' > /app/start.sh && chmod +x /app/start.sh
 
 USER nextjs
 
 EXPOSE 3000
 
-# Push schema to DB on startup, then start server
-CMD npx prisma db push --skip-generate --accept-data-loss && node server.js
+CMD ["/app/start.sh"]
