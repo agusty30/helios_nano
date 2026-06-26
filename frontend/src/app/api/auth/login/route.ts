@@ -29,8 +29,9 @@ export async function POST(request: NextRequest) {
     const cookieHeader = setAuthCookie(token);
     response.headers.set("Set-Cookie", cookieHeader["Set-Cookie"]);
     return response;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Login error:", error);
-    return NextResponse.json({ error: "Login failed" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Login failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
