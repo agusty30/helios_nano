@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { execSync } from "child_process";
 
 export async function GET() {
   const checks: Record<string, string> = {};
@@ -24,4 +25,17 @@ export async function GET() {
   const healthy = checks.database === "connected" && checks.tables.startsWith("ok");
 
   return NextResponse.json({ healthy, checks }, { status: healthy ? 200 : 503 });
+}
+
+export async function POST() {
+  try {
+    const output = execSync(
+      "npx prisma db push --skip-generate --accept-data-loss 2>&1",
+      { cwd: process.cwd(), timeout: 30000, env: process.env as NodeJS.ProcessEnv }
+    ).toString();
+    return NextResponse.json({ success: true, output });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
 }
