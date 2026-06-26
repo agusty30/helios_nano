@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 
 export async function GET() {
   const checks: Record<string, string> = {};
@@ -17,8 +18,24 @@ export async function GET() {
   try {
     const userCount = await prisma.user.count();
     checks.tables = `ok (${userCount} users)`;
+
+    if (userCount > 0) {
+      const user = await prisma.user.findFirst({ select: { email: true, passwordHash: true } });
+      checks.first_user_email = user?.email ?? "none";
+      checks.password_hash_format = user?.passwordHash
+        ? `${user.passwordHash.substring(0, 7)}... (len=${user.passwordHash.length})`
+        : "empty";
+    }
   } catch (error: unknown) {
     checks.tables = `error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  try {
+    const testHash = await bcrypt.hash("test123", 12);
+    const testVerify = await bcrypt.compare("test123", testHash);
+    checks.bcrypt = testVerify ? "working" : "hash/compare mismatch";
+  } catch (error: unknown) {
+    checks.bcrypt = `error: ${error instanceof Error ? error.message : String(error)}`;
   }
 
   const healthy = checks.database === "connected" && checks.tables.startsWith("ok");
