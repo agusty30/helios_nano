@@ -3,10 +3,6 @@ FROM node:22-slim AS builder
 
 WORKDIR /app
 
-ARG DATABASE_URL
-
-ENV DATABASE_URL=$DATABASE_URL
-
 # Install OpenSSL for Prisma
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
@@ -15,9 +11,8 @@ RUN npm ci
 
 COPY . .
 
-# Generate Prisma client + push schema to DB + build Next.js
+# Generate Prisma client (no DB needed) + build Next.js
 RUN npx prisma generate
-RUN if [ -n "$DATABASE_URL" ]; then npx prisma db push --skip-generate --accept-data-loss; fi
 RUN npm run build
 
 # Production image — standalone output only
@@ -36,7 +31,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-# Prisma client is needed at runtime
+# Prisma client + schema needed at runtime
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/prisma ./prisma
@@ -45,4 +40,5 @@ USER nextjs
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+# Push schema to DB on startup, then start server
+CMD npx prisma db push --skip-generate --accept-data-loss && node server.js
