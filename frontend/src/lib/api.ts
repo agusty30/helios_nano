@@ -1,4 +1,4 @@
-import { apiUrl, backendUrl } from "./config";
+import { backendUrl } from "./config";
 import type {
   ApiStatus, BudgetStateResponse, BudgetOptimizeResponse,
   PaidServiceResponse, CanvasMetrics, AgentRouteResponse, TransferResponse,
@@ -29,11 +29,11 @@ async function post<T>(url: string, body: unknown): Promise<T | null> {
 }
 
 export const api = {
-  fetchStatus: () => get<ApiStatus>(apiUrl("/api/status")),
-  fetchBudgetState: () => get<BudgetStateResponse>(apiUrl("/api/budget")),
-  fetchBudgetOptimize: () => get<BudgetOptimizeResponse>(apiUrl("/api/budget/optimize")),
-  fetchCatalog: () => get<PaidServiceResponse[]>(apiUrl("/api/budget/catalog")),
-  fetchTransfers: (limit = 10) => get<TransferResponse>(apiUrl(`/api/transfers?limit=${limit}`)),
+  fetchStatus: () => get<ApiStatus>("/api/status"),
+  fetchBudgetState: () => get<BudgetStateResponse>("/api/budget"),
+  fetchBudgetOptimize: () => get<BudgetOptimizeResponse>("/api/budget/optimize"),
+  fetchCatalog: () => get<PaidServiceResponse[]>("/api/budget/catalog"),
+  fetchTransfers: (limit = 10) => get<TransferResponse>(`/api/transfers?limit=${limit}`),
   fetchCanvasMetrics: () => get<CanvasMetrics>(backendUrl("/v1/canvas-metrics")),
   postAgentRoute: (prompt: string, priority = "low") =>
     post<AgentRouteResponse>(backendUrl("/v1/agent-route"), { prompt, priority }),
