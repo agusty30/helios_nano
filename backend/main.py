@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from router import route_request, RouteDecision, HEAVY_TIER_COST, CHEAP_TIER_COST, SAVINGS_PER_CHEAP_CALL
+from router import route_request, RouteDecision, HEAVY_TIER_COST, CHEAP_TIER_COST, SAVINGS_PER_CHEAP_CALL, get_active_provider, call_llm, PROVIDERS
 from state import CanvasState
 from x402_middleware import (
     SELLER, FACILITATOR_URL, NETWORK,
@@ -88,6 +88,7 @@ class AgentRouteResponse(BaseModel):
     cost: float
     route: str
     settlement: str
+    provider: str
 
 
 # --- Endpoints ---
@@ -304,47 +305,21 @@ async def agent_route(request: AgentRouteRequest):
         state=canvas_state,
     )
 
-    # Attempt LLM call (or mock if no API key)
-    openai_key = os.getenv("OPENAI_API_KEY", "")
-    llm_response = ""
-
-    if openai_key and not openai_key.startswith("sk-..."):
-        # Real LLM call via OpenAI-compatible endpoint
+    # Call LLM via the active provider (or mock)
+    active = get_active_provider()
+    if active:
+        provider, api_key = active
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {openai_key}",
-                        "Content-Type": "application/json",
-                        "X-Circle-Gateway-Auth": decision.authorization_header,
-                    },
-                    json={
-                        "model": decision.model,
-                        "messages": [
-                            {"role": "user", "content": request.prompt}
-                        ],
-                        "max_tokens": 256,
-                    },
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    llm_response = data["choices"][0]["message"]["content"]
-                else:
-                    llm_response = f"[LLM returned {resp.status_code}] Routed to {decision.model} via {decision.route_name}"
+            llm_response = await call_llm(provider, api_key, decision.model, request.prompt)
         except Exception as e:
-            llm_response = f"[LLM call failed: {str(e)}] Routed to {decision.model} via {decision.route_name}"
+            llm_response = f"[{provider.name} error: {str(e)}] Routed to {decision.model} via {decision.route_name}"
     else:
-        # Mock response for development
         llm_response = (
-            f"[Mock response] Request routed to {decision.model} "
-            f"via {decision.route_name} tier. "
+            f"[Mock response] No API key configured. "
+            f"Request routed to {decision.model} via {decision.route_name} tier. "
             f"Settlement: gas-free EIP-3009 on Arc Testnet. "
-            f"Prompt: '{request.prompt[:50]}...'" if len(request.prompt) > 50
-            else f"[Mock response] Request routed to {decision.model} "
-            f"via {decision.route_name} tier. "
-            f"Settlement: gas-free EIP-3009 on Arc Testnet. "
-            f"Prompt: '{request.prompt}'"
+            f"Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or OPENROUTER_API_KEY to enable. "
+            f"Prompt: '{request.prompt[:80]}'"
         )
 
     # Calculate savings (savings only apply when routing to cheap tier)
@@ -363,6 +338,7 @@ async def agent_route(request: AgentRouteRequest):
         cost=decision.cost_per_call,
         route=decision.route_name,
         settlement="gas-free-eip3009",
+        provider=decision.provider,
     )
 
 
@@ -374,6 +350,26 @@ async def reset_daily():
         "status": "reset",
         "message": "Daily counters have been reset",
         "daily_budget": canvas_state.daily_budget,
+    }
+
+
+@app.get("/v1/providers")
+async def list_providers():
+    """Show configured LLM providers and which is active."""
+    active = get_active_provider()
+    active_name = active[0].name if active else None
+    return {
+        "active_provider": active_name,
+        "providers": [
+            {
+                "name": p.name,
+                "configured": bool(os.getenv(p.api_key_env, "")),
+                "env_var": p.api_key_env,
+                "cheap_model": p.cheap_model,
+                "heavy_model": p.heavy_model,
+            }
+            for p in PROVIDERS
+        ],
     }
 
 
