@@ -310,3 +310,21 @@ export async function POST() {
 
   return NextResponse.json({ done: true, results });
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const { email } = await request.json();
+    if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+
+    const user = await prisma.user.update({
+      where: { email },
+      data: { emailVerified: new Date() },
+      select: { id: true, email: true, emailVerified: true },
+    });
+
+    return NextResponse.json({ success: true, user });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
