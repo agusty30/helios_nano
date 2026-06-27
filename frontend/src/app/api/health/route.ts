@@ -290,8 +290,30 @@ ALTER TABLE "EmailVerification" ADD CONSTRAINT "EmailVerification_userId_fkey" F
 ALTER TABLE "PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE;
 `;
 
+const MIGRATE_SQL = `
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailVerified" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "image" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "locked" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lockedAt" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastLoginAt" TIMESTAMP(3);
+ALTER TABLE "User" ALTER COLUMN "orgId" DROP NOT NULL;
+ALTER TABLE "User" ALTER COLUMN "passwordHash" DROP NOT NULL;
+`;
+
 export async function POST() {
   const results: string[] = [];
+
+  const migrations = MIGRATE_SQL.split(";").map(s => s.trim()).filter(s => s.length > 0);
+  for (const stmt of migrations) {
+    try {
+      await prisma.$executeRawUnsafe(stmt);
+      results.push(`MIGRATE OK: ${stmt.slice(0, 70)}...`);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      results.push(`MIGRATE SKIP: ${stmt.slice(0, 70)}... → ${msg}`);
+    }
+  }
+
   const statements = SCHEMA_SQL.split(";").map(s => s.trim()).filter(s => s.length > 0);
 
   for (const stmt of statements) {
