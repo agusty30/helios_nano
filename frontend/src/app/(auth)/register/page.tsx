@@ -20,8 +20,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   const canProceed = step === 1
-    ? firstName.trim() && lastName.trim()
-    : email.trim() && password.length >= 12 && password === confirmPassword;
+    ? !!(firstName.trim() && lastName.trim())
+    : !!(email.trim() && password.length >= 8 && password === confirmPassword);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,9 +171,9 @@ export default function RegisterPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    minLength={12}
+                    minLength={8}
                     className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-10 pr-10 py-3 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
-                    placeholder="Min. 12 characters"
+                    placeholder="Min. 8 characters"
                   />
                   <button
                     type="button"
@@ -236,6 +236,14 @@ export default function RegisterPage() {
               )}
             </button>
           </div>
+
+          {step === 2 && !canProceed && (email || password || confirmPassword) && (
+            <p className="text-[10px] text-muted-dark text-center">
+              {!email.trim() ? "Enter your email address" :
+               password.length < 8 ? `Password needs ${8 - password.length} more character${8 - password.length === 1 ? "" : "s"}` :
+               password !== confirmPassword ? "Passwords must match" : ""}
+            </p>
+          )}
         </form>
 
         <div className="mt-6 text-center">

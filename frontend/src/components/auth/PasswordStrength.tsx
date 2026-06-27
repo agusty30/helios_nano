@@ -41,7 +41,7 @@ export default function PasswordStrength({ password }: { password: string }) {
         strength >= 4 ? "text-emerald-400" : strength >= 3 ? "text-yellow-400" : strength >= 2 ? "text-orange-400" : "text-red-400"
       }`}>
         {level.label} password
-        {password.length < 12 && <span className="text-muted-dark ml-1">· Min. 12 characters</span>}
+        {password.length < 8 && <span className="text-muted-dark ml-1">· Min. 8 characters</span>}
       </p>
     </div>
   );

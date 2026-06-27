@@ -118,9 +118,9 @@ function ResetContent() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={12}
+                minLength={8}
                 className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-10 pr-10 py-3 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
-                placeholder="Min. 12 characters"
+                placeholder="Min. 8 characters"
               />
               <button
                 type="button"
@@ -153,7 +153,7 @@ function ResetContent() {
 
           <button
             type="submit"
-            disabled={loading || password.length < 12 || password !== confirmPassword}
+            disabled={loading || password.length < 8 || password !== confirmPassword}
             className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary/80 text-white text-[13px] font-semibold py-3 rounded-xl hover:brightness-110 transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
           >
             {loading ? (

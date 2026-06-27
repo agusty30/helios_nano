@@ -27,6 +27,29 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Pre-flight check for locked/unverified accounts
+      const statusRes = await fetch("/api/auth/check-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const statusData = await statusRes.json();
+
+      if (statusData.status === "locked") {
+        const msg = statusData.minutesLeft
+          ? `Account locked. Try again in ${statusData.minutesLeft} minutes.`
+          : "Account locked. Contact support.";
+        setError(msg);
+        setLoading(false);
+        return;
+      }
+
+      if (statusData.status === "unverified") {
+        router.push(`/verify?email=${encodeURIComponent(email)}`);
+        return;
+      }
+
+      // Proceed with sign in
       const result = await Promise.race([
         signIn("credentials", { email, password, redirect: false }),
         new Promise<never>((_, reject) =>
@@ -41,15 +64,7 @@ export default function LoginPage() {
       }
 
       if (result.error) {
-        if (result.error.includes("Account locked")) {
-          setError(result.error);
-        } else if (result.error.includes("EMAIL_NOT_VERIFIED:")) {
-          const userEmail = result.error.split("EMAIL_NOT_VERIFIED:")[1];
-          router.push(`/verify?email=${encodeURIComponent(userEmail)}`);
-          return;
-        } else {
-          setError("Invalid email or password.");
-        }
+        setError("Invalid email or password.");
         setLoading(false);
         return;
       }
@@ -63,7 +78,7 @@ export default function LoginPage() {
       setLoading(false);
     } catch (err) {
       if (err instanceof Error && err.message === "timeout") {
-        setError("Request timed out. Please check your connection and try again.");
+        setError("Request timed out. Check your connection and try again.");
       } else {
         setError("Connection error. Please check your network and try again.");
       }
