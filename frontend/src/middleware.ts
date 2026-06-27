@@ -28,7 +28,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req: request });
+  const token = await getToken({
+    req: request,
+    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+  });
 
   if (!token) {
     const loginUrl = new URL("/login", request.url);
