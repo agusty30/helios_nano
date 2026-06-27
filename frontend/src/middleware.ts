@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const PUBLIC = ["/login", "/register", "/verify", "/forgot-password", "/reset-password"];
+const PUBLIC = [
+  "/", "/features", "/pricing", "/docs", "/about", "/contact",
+  "/login", "/register", "/verify", "/forgot-password", "/reset-password",
+];
+
 const AUTH_API = ["/api/auth"];
 
 export async function middleware(request: NextRequest) {
@@ -16,7 +20,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+  if (PUBLIC.some((p) => p === "/" ? pathname === "/" : pathname === p || pathname.startsWith(p + "/"))) {
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
 

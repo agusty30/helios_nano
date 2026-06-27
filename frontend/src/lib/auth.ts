@@ -29,10 +29,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (user.locked) {
           if (user.lockedAt) {
             const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
-            if (user.lockedAt > thirtyMinAgo) return null;
+            if (user.lockedAt > thirtyMinAgo) {
+              throw new Error("Account locked due to too many failed attempts. Try again in 30 minutes.");
+            }
             await prisma.user.update({ where: { id: user.id }, data: { locked: false, lockedAt: null } });
           } else {
-            return null;
+            throw new Error("Account locked. Contact support.");
           }
         }
 
@@ -56,7 +58,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
-        if (!user.emailVerified) return null;
+        if (!user.emailVerified) {
+          throw new Error("EMAIL_NOT_VERIFIED:" + email);
+        }
 
         await prisma.user.update({
           where: { id: user.id },

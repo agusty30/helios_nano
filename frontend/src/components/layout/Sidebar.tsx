@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 const nav = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Mission Control", href: "/mission-control", icon: Crosshair },
   { type: "divider" as const, label: "Agents" },
   { label: "Payment Agent", href: "/agents?agent=payment", icon: CreditCard },
@@ -65,7 +65,7 @@ export default function Sidebar() {
 
           if (!("href" in item)) return null;
           const Icon = item.icon;
-          const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href.split("?")[0]);
+          const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href.split("?")[0]);
 
           return (
             <Link

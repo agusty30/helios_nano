@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Hexagon, Bot, Loader2, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Hexagon, Bot, Loader2, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -14,20 +16,58 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+
+    if (!email || !password) {
+      setError("Please enter your email and password.");
+      return;
+    }
+
     setError("");
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const result = await Promise.race([
+        signIn("credentials", { email, password, redirect: false }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 15000)
+        ),
+      ]);
 
-    if (result?.error) {
-      setError(result.error === "CredentialsSignin" ? "Invalid email or password" : result.error);
+      if (!result) {
+        setError("Unexpected error. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      if (result.error) {
+        if (result.error.includes("Account locked")) {
+          setError(result.error);
+        } else if (result.error.includes("EMAIL_NOT_VERIFIED:")) {
+          const userEmail = result.error.split("EMAIL_NOT_VERIFIED:")[1];
+          router.push(`/verify?email=${encodeURIComponent(userEmail)}`);
+          return;
+        } else {
+          setError("Invalid email or password.");
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (result.ok) {
+        window.location.href = "/dashboard";
+        return;
+      }
+
+      setError("Login failed. Please try again.");
       setLoading(false);
-    } else {
-      window.location.href = "/";
+    } catch (err) {
+      if (err instanceof Error && err.message === "timeout") {
+        setError("Request timed out. Please check your connection and try again.");
+      } else {
+        setError("Connection error. Please check your network and try again.");
+      }
+      setLoading(false);
     }
   };
 
@@ -53,9 +93,9 @@ export default function LoginPage() {
         <p className="text-[13px] text-muted-dark mb-6">Sign in to your HeliOS dashboard</p>
 
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-[12px] text-red-400 flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-            {error}
+          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-[12px] text-red-400 flex items-start gap-2">
+            <AlertCircle size={14} className="shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
@@ -69,7 +109,8 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-10 pr-3 py-3 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
+                disabled={loading}
+                className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-10 pr-3 py-3 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all disabled:opacity-50"
                 placeholder="you@company.com"
               />
             </div>
@@ -89,7 +130,8 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-10 pr-10 py-3 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
+                disabled={loading}
+                className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-10 pr-10 py-3 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all disabled:opacity-50"
                 placeholder="Enter your password"
               />
               <button
@@ -108,7 +150,10 @@ export default function LoginPage() {
             className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary/80 text-white text-[13px] font-semibold py-3 rounded-xl hover:brightness-110 transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
           >
             {loading ? (
-              <Loader2 size={15} className="animate-spin" />
+              <>
+                <Loader2 size={15} className="animate-spin" />
+                Signing in...
+              </>
             ) : (
               <>
                 Sign In
