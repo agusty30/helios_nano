@@ -338,8 +338,29 @@ export async function POST() {
 
 export async function PATCH(request: Request) {
   try {
-    const { email } = await request.json();
+    const { email, action, newPassword } = await request.json();
     if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+
+    if (action === "unlock") {
+      const user = await prisma.user.update({
+        where: { email },
+        data: { locked: false, lockedAt: null },
+        select: { id: true, email: true, locked: true },
+      });
+      await prisma.loginAttempt.deleteMany({ where: { email } });
+      return NextResponse.json({ success: true, action: "unlocked", user });
+    }
+
+    if (action === "reset-password" && newPassword) {
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+      const user = await prisma.user.update({
+        where: { email },
+        data: { passwordHash, locked: false, lockedAt: null },
+        select: { id: true, email: true, locked: true },
+      });
+      await prisma.loginAttempt.deleteMany({ where: { email } });
+      return NextResponse.json({ success: true, action: "password-reset", user });
+    }
 
     const user = await prisma.user.update({
       where: { email },
