@@ -1,77 +1,57 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
-
-interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  orgId: string;
-}
+import { SessionProvider, useSession, signOut } from "next-auth/react";
+import { createContext, useContext } from "react";
 
 interface AuthContextType {
-  user: AuthUser | null;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    orgId: string;
+    emailVerified: boolean;
+  } | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ error?: string }>;
-  register: (data: { name: string; email: string; password: string; companyName?: string }) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  login: async () => ({}),
-  register: async () => ({}),
   logout: async () => {},
 });
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+function AuthInner({ children }: { children: React.ReactNode }) {
+  const { data: session, status } = useSession();
 
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setUser(data?.user ?? null))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
-  }, []);
+  const user = session?.user
+    ? {
+        id: (session.user as Record<string, unknown>).id as string || "",
+        name: session.user.name || "",
+        email: session.user.email || "",
+        role: (session.user as Record<string, unknown>).role as string || "VIEWER",
+        orgId: (session.user as Record<string, unknown>).orgId as string || "",
+        emailVerified: !!(session.user as Record<string, unknown>).emailVerified,
+      }
+    : null;
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { error: data.error || "Login failed" };
-    setUser(data.user);
-    return {};
-  }, []);
-
-  const register = useCallback(async (input: { name: string; email: string; password: string; companyName?: string }) => {
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    const data = await res.json();
-    if (!res.ok) return { error: data.error || "Registration failed" };
-    setUser(data.user);
-    return {};
-  }, []);
-
-  const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setUser(null);
-    window.location.href = "/login";
-  }, []);
+  const logout = async () => {
+    await signOut({ callbackUrl: "/login" });
+  };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading: status === "loading", logout }}>
       {children}
     </AuthContext.Provider>
+  );
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <SessionProvider>
+      <AuthInner>{children}</AuthInner>
+    </SessionProvider>
   );
 }
 

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 
@@ -18,14 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-bg text-foreground antialiased font-sans">
         <AuthProvider>
           <ToastProvider>
-            <div className="flex h-screen overflow-hidden">
-              <Sidebar />
-              <main className="flex-1 overflow-y-auto">
-                <div className="p-8 max-w-[1600px] mx-auto">
-                  {children}
-                </div>
-              </main>
-            </div>
+            {children}
           </ToastProvider>
         </AuthProvider>
       </body>

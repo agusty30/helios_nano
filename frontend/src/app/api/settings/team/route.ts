@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, hashPassword } from "@/lib/auth";
+import { getSession } from "@/lib/session";
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Email already in use" }, { status: 409 });
   }
 
-  const passwordHash = await hashPassword(password);
+  const passwordHash = await bcrypt.hash(password, 12);
   const member = await prisma.user.create({
     data: { orgId: user.orgId, name, email, passwordHash, role: role || "VIEWER" },
     select: { id: true, name: true, email: true, role: true, createdAt: true },

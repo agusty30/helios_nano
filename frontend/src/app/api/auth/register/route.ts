@@ -1,49 +1,73 @@
 import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { hashPassword, signToken, setAuthCookie } from "@/lib/auth";
+import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, password, companyName } = await request.json();
+    const { firstName, lastName, email, password, companyName } = await request.json();
 
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: "Name, email, and password are required" }, { status: 400 });
+    if (!firstName || !lastName || !email || !password) {
+      return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
-    if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+    if (password.length < 12) {
+      return NextResponse.json({ error: "Password must be at least 12 characters" }, { status: 400 });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
       return NextResponse.json({ error: "Email already registered" }, { status: 409 });
     }
 
-    const passwordHash = await hashPassword(password);
+    const passwordHash = await bcrypt.hash(password, 12);
+    const name = `${firstName} ${lastName}`;
 
     const org = await prisma.organization.create({
       data: {
         name: companyName || `${name}'s Organization`,
-        users: {
-          create: { name, email, passwordHash, role: "ADMIN" },
-        },
-        paymentPolicies: {
-          create: {},
-        },
       },
-      include: { users: true },
     });
 
-    const user = org.users[0];
-    const token = signToken({ userId: user.id, orgId: org.id, role: user.role });
-
-    const response = NextResponse.json({
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
-      org: { id: org.id, name: org.name },
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+        role: "ADMIN",
+        orgId: org.id,
+      },
     });
 
-    const cookieHeader = setAuthCookie(token);
-    response.headers.set("Set-Cookie", cookieHeader["Set-Cookie"]);
-    return response;
+    await prisma.paymentPolicy.create({
+      data: { orgId: org.id },
+    });
+
+    const code = crypto.randomInt(100000, 999999).toString();
+    const codeHash = await bcrypt.hash(code, 10);
+
+    await prisma.emailVerification.create({
+      data: {
+        userId: user.id,
+        codeHash,
+        expires: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
+    try {
+      await sendVerificationEmail(email, code, firstName);
+    } catch (emailErr) {
+      console.error("Email send error:", emailErr);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Account created. Check your email for the verification code.",
+      email: user.email,
+    }, { status: 201 });
   } catch (error: unknown) {
     console.error("Register error:", error);
     const message = error instanceof Error ? error.message : "Registration failed";

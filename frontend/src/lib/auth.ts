@@ -1,54 +1,101 @@
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
 import { prisma } from "./prisma";
 
-const JWT_SECRET = process.env.JWT_SECRET || "helios-dev-secret-change-in-production";
-const COOKIE_NAME = "helios-token";
+export const { handlers, signIn, signOut, auth } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  session: { strategy: "jwt" },
+  pages: {
+    signIn: "/login",
+  },
+  providers: [
+    Credentials({
+      name: "credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null;
 
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12);
-}
+        const email = credentials.email as string;
+        const password = credentials.password as string;
 
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
-}
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user || !user.passwordHash) return null;
 
-export function signToken(payload: { userId: string; orgId: string; role: string }): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
-}
+        if (user.locked) {
+          if (user.lockedAt) {
+            const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+            if (user.lockedAt > thirtyMinAgo) return null;
+            await prisma.user.update({ where: { id: user.id }, data: { locked: false, lockedAt: null } });
+          } else {
+            return null;
+          }
+        }
 
-export function verifyToken(token: string): { userId: string; orgId: string; role: string } | null {
-  try {
-    return jwt.verify(token, JWT_SECRET) as { userId: string; orgId: string; role: string };
-  } catch {
-    return null;
-  }
-}
+        const valid = await bcrypt.compare(password, user.passwordHash);
 
-export async function getSession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
-  if (!token) return null;
+        await prisma.loginAttempt.create({
+          data: { email, success: valid },
+        });
 
-  const payload = verifyToken(token);
-  if (!payload) return null;
+        if (!valid) {
+          const recentFails = await prisma.loginAttempt.count({
+            where: {
+              email,
+              success: false,
+              createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
+            },
+          });
+          if (recentFails >= 5) {
+            await prisma.user.update({ where: { id: user.id }, data: { locked: true, lockedAt: new Date() } });
+          }
+          return null;
+        }
 
-  const user = await prisma.user.findUnique({
-    where: { id: payload.userId },
-    select: { id: true, name: true, email: true, role: true, orgId: true },
-  });
-  return user;
-}
+        if (!user.emailVerified) return null;
 
-export function setAuthCookie(token: string) {
-  return {
-    "Set-Cookie": `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
-  };
-}
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        });
 
-export function clearAuthCookie() {
-  return {
-    "Set-Cookie": `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0`,
-  };
-}
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          image: user.image,
+        };
+      },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { role: true, orgId: true, emailVerified: true },
+        });
+        if (dbUser) {
+          token.role = dbUser.role;
+          token.orgId = dbUser.orgId;
+          token.emailVerified = !!dbUser.emailVerified;
+        }
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        const u = session.user as unknown as Record<string, unknown>;
+        u.id = token.sub!;
+        u.role = token.role;
+        u.orgId = token.orgId;
+        u.emailVerified = token.emailVerified;
+      }
+      return session;
+    },
+  },
+});
