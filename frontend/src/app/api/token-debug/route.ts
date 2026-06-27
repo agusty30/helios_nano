@@ -4,57 +4,40 @@ import { getToken } from "next-auth/jwt";
 export async function GET(request: NextRequest) {
   const results: Record<string, unknown> = {};
 
-  // Show what cookies exist
+  const isSecure = request.nextUrl.protocol === "https:";
+  results.protocol = request.nextUrl.protocol;
+  results.isSecure = isSecure;
+
   const allCookies = request.cookies.getAll();
   results.cookies = allCookies.map(c => ({ name: c.name, valueLen: c.value.length }));
 
-  // Try getToken with explicit secret
+  // The fix: pass secureCookie to match the cookie prefix
   try {
     const token = await getToken({
       req: request,
       secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+      secureCookie: isSecure,
     });
-    results.getToken_with_secret = token ? { sub: token.sub, email: token.email, role: token.role } : "null";
+    results.getToken_secureCookie = token ? { sub: token.sub, email: token.email, role: token.role, emailVerified: token.emailVerified } : "null";
   } catch (e) {
-    results.getToken_with_secret = `error: ${e instanceof Error ? e.message : String(e)}`;
+    results.getToken_secureCookie = `error: ${e instanceof Error ? e.message : String(e)}`;
   }
 
-  // Try getToken without secret (uses env auto-detect)
+  // Also try with explicit cookieName
   try {
-    const token = await getToken({ req: request });
-    results.getToken_auto = token ? { sub: token.sub, email: token.email } : "null";
-  } catch (e) {
-    results.getToken_auto = `error: ${e instanceof Error ? e.message : String(e)}`;
-  }
-
-  // Try with explicit salt
-  try {
+    const cookieName = isSecure ? "__Secure-authjs.session-token" : "authjs.session-token";
     const token = await getToken({
       req: request,
       secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
-      salt: "__Secure-authjs.session-token",
+      cookieName,
     });
-    results.getToken_secure_salt = token ? { sub: token.sub, email: token.email } : "null";
+    results.getToken_explicitCookie = token ? { sub: token.sub, email: token.email } : "null";
   } catch (e) {
-    results.getToken_secure_salt = `error: ${e instanceof Error ? e.message : String(e)}`;
+    results.getToken_explicitCookie = `error: ${e instanceof Error ? e.message : String(e)}`;
   }
 
-  // Try with non-secure salt
-  try {
-    const token = await getToken({
-      req: request,
-      secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
-      salt: "authjs.session-token",
-    });
-    results.getToken_nonsecure_salt = token ? { sub: token.sub, email: token.email } : "null";
-  } catch (e) {
-    results.getToken_nonsecure_salt = `error: ${e instanceof Error ? e.message : String(e)}`;
-  }
-
-  // Show env state
   results.has_auth_secret = !!process.env.AUTH_SECRET;
   results.has_nextauth_secret = !!process.env.NEXTAUTH_SECRET;
-  results.nextauth_url = process.env.NEXTAUTH_URL || "not set";
 
   return NextResponse.json(results);
 }
