@@ -9,6 +9,9 @@ export async function GET() {
   checks.jwt_secret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET ? "set" : "missing";
   checks.nextauth_url = process.env.NEXTAUTH_URL || "not set";
   checks.nextauth_secret = process.env.NEXTAUTH_SECRET ? "set" : "missing";
+  checks.auth_secret = process.env.AUTH_SECRET ? "set" : "missing";
+  checks.auth_secret_resolved = (process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET) ? "set" : "MISSING - auth will fail";
+  checks.resend_api_key = process.env.RESEND_API_KEY ? "set" : "missing - emails won't send";
 
   try {
     await prisma.$queryRaw`SELECT 1`;
