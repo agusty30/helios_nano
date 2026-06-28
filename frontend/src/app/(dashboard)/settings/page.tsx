@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -111,8 +111,9 @@ export default function SettingsPage() {
           setIndustry(data.organization.industry || "");
           if (data.organization.timezone) setTimezone(data.organization.timezone);
         }
+        orgLoaded.current = true;
       })
-      .catch(() => {});
+      .catch(() => { orgLoaded.current = true; });
   }, []);
 
   // Load spending policies from DB
@@ -126,9 +127,29 @@ export default function SettingsPage() {
           setRequire2fa(data.policy.require2fa ?? true);
           setAgentLimit(data.policy.agentLimit?.toString() || "1000");
         }
+        policyLoaded.current = true;
       })
-      .catch(() => {});
+      .catch(() => { policyLoaded.current = true; });
   }, []);
+
+  const orgLoaded = useRef(false);
+  const policyLoaded = useRef(false);
+  const orgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const policyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!orgLoaded.current) return;
+    if (orgTimer.current) clearTimeout(orgTimer.current);
+    orgTimer.current = setTimeout(() => { saveOrg(); }, 1500);
+    return () => { if (orgTimer.current) clearTimeout(orgTimer.current); };
+  }, [companyName, industry, timezone]);
+
+  useEffect(() => {
+    if (!policyLoaded.current) return;
+    if (policyTimer.current) clearTimeout(policyTimer.current);
+    policyTimer.current = setTimeout(() => { savePolicy(); }, 1500);
+    return () => { if (policyTimer.current) clearTimeout(policyTimer.current); };
+  }, [autoApprove, dailyLimit, agentLimit, require2fa]);
 
   // Load team members from DB
   const loadTeam = () => {

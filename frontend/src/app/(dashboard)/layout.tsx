@@ -1,6 +1,7 @@
 "use client";
 
 import Sidebar from "@/components/layout/Sidebar";
+import NotificationBell from "@/components/ui/NotificationBell";
 import { useState } from "react";
 import { Menu } from "lucide-react";
 
@@ -38,7 +39,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <Menu size={20} />
           </button>
-          <span className="text-sm font-semibold text-foreground">HeliOS</span>
+          <span className="text-sm font-semibold text-foreground flex-1">HeliOS</span>
+          <NotificationBell />
+        </div>
+        {/* Desktop notification bar */}
+        <div className="hidden lg:flex items-center justify-end px-8 py-2 border-b border-border/50">
+          <NotificationBell />
         </div>
         <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
           {children}

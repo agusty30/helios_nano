@@ -18,8 +18,14 @@ interface WalletRecord {
   createdAt: string;
 }
 
+interface WalletBalance {
+  balance: number;
+  loading: boolean;
+}
+
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<WalletRecord[]>([]);
+  const [balances, setBalances] = useState<Record<string, WalletBalance>>({});
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -29,7 +35,19 @@ export default function WalletsPage() {
   useEffect(() => {
     fetch("/api/wallets")
       .then((r) => (r.ok ? r.json() : { wallets: [] }))
-      .then((data) => setWallets(data.wallets || []))
+      .then((data) => {
+        const wList = data.wallets || [];
+        setWallets(wList);
+        for (const w of wList) {
+          setBalances((prev) => ({ ...prev, [w.id]: { balance: 0, loading: true } }));
+          fetch(`/api/wallets/${w.id}/balance`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => {
+              if (d) setBalances((prev) => ({ ...prev, [w.id]: { balance: d.balance, loading: false } }));
+            })
+            .catch(() => setBalances((prev) => ({ ...prev, [w.id]: { balance: 0, loading: false } })));
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -134,6 +152,36 @@ export default function WalletsPage() {
         </motion.div>
       )}
 
+      {/* Portfolio summary */}
+      {wallets.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-bright rounded-xl p-5"
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <span className="text-[10px] text-muted-dark uppercase tracking-wide">Total Wallets</span>
+              <p className="text-lg font-bold text-foreground">{wallets.length}</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-dark uppercase tracking-wide">Treasury</span>
+              <p className="text-lg font-bold text-primary-light">{wallets.filter(w => w.type === "TREASURY").length}</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-dark uppercase tracking-wide">Agent</span>
+              <p className="text-lg font-bold text-success">{wallets.filter(w => w.type === "AGENT").length}</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-dark uppercase tracking-wide">Portfolio Value</span>
+              <p className="text-lg font-bold text-foreground">
+                ${Object.values(balances).reduce((sum, b) => sum + b.balance, 0).toFixed(4)} USDC
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Wallet list */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -177,6 +225,16 @@ export default function WalletsPage() {
                   )}>
                     {wallet.type}
                   </span>
+                </div>
+                <div className="text-right">
+                  {balances[wallet.id]?.loading ? (
+                    <Loader2 size={14} className="text-muted-dark animate-spin" />
+                  ) : (
+                    <span className="text-sm font-bold text-foreground">
+                      ${(balances[wallet.id]?.balance || 0).toFixed(4)}
+                    </span>
+                  )}
+                  <span className="text-[9px] text-muted-dark block">USDC</span>
                 </div>
               </div>
 
