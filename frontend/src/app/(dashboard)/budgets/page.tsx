@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { cn, formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
-import { budgets, spendingData } from "@/lib/mock-data";
-import type { BudgetStateResponse, Budget } from "@/lib/types";
+import type { BudgetStateResponse } from "@/lib/types";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
@@ -18,24 +17,58 @@ const MOCK_BUDGET: BudgetStateResponse = {
   byCategory: [], byService: [],
 };
 
+interface CostItem {
+  category: string;
+  amount: number;
+  percentage: number;
+}
+
+interface AnalyticsData {
+  summary: { totalSpend: number; transactionCount: number; completedTransactions: number; activeAgents: number; totalTasks: number };
+  costBreakdown: CostItem[];
+  spendingTrend: Array<{ date: string; amount: number }>;
+}
+
 export default function BudgetsPage() {
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+
+  useEffect(() => {
+    fetch("/api/analytics")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => data && setAnalytics(data))
+      .catch(() => {});
+  }, []);
+
   const fetchBudget = useCallback(() => api.fetchBudgetState(), []);
   const budget = useApi(fetchBudget, MOCK_BUDGET, 15000);
 
-  const displayBudgets: Budget[] = useMemo(() => {
-    if (!budget.isLive || budget.data.byCategory.length === 0) return budgets;
-    return budget.data.byCategory.map((cat) => ({
-      department: cat.key,
-      allocated: budget.data.dailyUsd / budget.data.byCategory.length,
-      spent: cat.spent,
-      forecast: cat.spent * 1.1,
-      trend: 0,
-    }));
-  }, [budget.data, budget.isLive]);
+  const displayBudgets = useMemo(() => {
+    if (budget.isLive && budget.data.byCategory.length > 0) {
+      return budget.data.byCategory.map((cat) => ({
+        department: cat.key,
+        allocated: budget.data.dailyUsd / budget.data.byCategory.length,
+        spent: cat.spent,
+        forecast: cat.spent * 1.1,
+        trend: 0,
+      }));
+    }
+    if (analytics?.costBreakdown?.length) {
+      const total = analytics.summary.totalSpend;
+      return analytics.costBreakdown.map(c => ({
+        department: c.category,
+        allocated: total > 0 ? (total / analytics.costBreakdown.length) * 1.3 : 1000,
+        spent: c.amount,
+        forecast: c.amount * 1.05,
+        trend: 0,
+      }));
+    }
+    return [];
+  }, [budget.data, budget.isLive, analytics]);
 
   const totalAllocated = displayBudgets.reduce((s, b) => s + b.allocated, 0);
   const totalSpent = displayBudgets.reduce((s, b) => s + b.spent, 0);
   const totalForecast = displayBudgets.reduce((s, b) => s + b.forecast, 0);
+  const anyLive = !!analytics || budget.isLive;
 
   return (
     <div className="space-y-6">
@@ -46,14 +79,13 @@ export default function BudgetsPage() {
             {budget.isLive ? "Live budget state from x402 budget engine" : "Department budget allocation and spend tracking"}
           </p>
         </div>
-        {budget.isLive ? (
+        {anyLive ? (
           <span className="flex items-center gap-1.5 text-[11px] font-medium text-success"><Wifi size={12} /> Live</span>
         ) : (
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Demo</span>
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Loading...</span>
         )}
       </div>
 
-      {/* Live budget summary */}
       {budget.isLive && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -89,35 +121,39 @@ export default function BudgetsPage() {
         ))}
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="glass-bright rounded-xl p-6"
-      >
-        <h3 className="text-sm font-semibold text-foreground mb-5">
-          {budget.isLive ? "Spend by Category (Live)" : "Budget vs Actual by Department"}
-        </h3>
-        <div className="h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={displayBudgets} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-              <XAxis dataKey="department" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => budget.isLive ? `$${v.toFixed(2)}` : `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip contentStyle={{ background: "#151B2E", border: "1px solid #1E293B", borderRadius: 8, fontSize: 12 }} formatter={(value: number) => [formatCurrency(value), undefined]} />
-              <Bar dataKey="allocated" fill="#4F46E5" radius={[4, 4, 0, 0]} opacity={0.3} />
-              <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
-                {displayBudgets.map((b, i) => (
-                  <Cell key={i} fill={b.spent / b.allocated > 0.9 ? "#EF4444" : b.spent / b.allocated > 0.75 ? "#F59E0B" : "#10B981"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </motion.div>
+      {displayBudgets.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="glass-bright rounded-xl p-6"
+        >
+          <h3 className="text-sm font-semibold text-foreground mb-5">
+            {budget.isLive ? "Spend by Category (Live)" : "Budget vs Actual by Department"}
+          </h3>
+          <div className="h-[280px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={displayBudgets} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                <XAxis dataKey="department" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => budget.isLive ? `$${v.toFixed(2)}` : `$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip contentStyle={{ background: "#151B2E", border: "1px solid #1E293B", borderRadius: 8, fontSize: 12 }} formatter={(value: number) => [formatCurrency(value), undefined]} />
+                <Bar dataKey="allocated" fill="#4F46E5" radius={[4, 4, 0, 0]} opacity={0.3} />
+                <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
+                  {displayBudgets.map((b, i) => (
+                    <Cell key={i} fill={b.spent / b.allocated > 0.9 ? "#EF4444" : b.spent / b.allocated > 0.75 ? "#F59E0B" : "#10B981"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {displayBudgets.map((b, i) => {
+        {displayBudgets.length === 0 ? (
+          <div className="col-span-2 text-center py-12 text-[13px] text-muted-dark">No budget data available yet. Transactions will populate department budgets.</div>
+        ) : displayBudgets.map((b, i) => {
           const pct = b.allocated > 0 ? (b.spent / b.allocated) * 100 : 0;
           const overBudget = b.forecast > b.allocated;
           return (

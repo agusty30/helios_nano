@@ -291,6 +291,40 @@ ALTER TABLE "Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId"
 ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE;
 ALTER TABLE "EmailVerification" ADD CONSTRAINT "EmailVerification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE;
 ALTER TABLE "PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE;
+
+CREATE TABLE "Approval" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "requesterId" TEXT,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "vendor" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "aiRecommendation" TEXT NOT NULL DEFAULT 'review',
+    "confidence" DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+    "department" TEXT NOT NULL DEFAULT 'General',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "resolvedAt" TIMESTAMP(3),
+    "resolvedBy" TEXT,
+    CONSTRAINT "Approval_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "Report" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'generating',
+    "data" JSONB NOT NULL DEFAULT '{}',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Report_pkey" PRIMARY KEY ("id")
+);
+
+CREATE INDEX "Approval_orgId_createdAt_idx" ON "Approval"("orgId", "createdAt");
+CREATE INDEX "Approval_status_idx" ON "Approval"("status");
+CREATE INDEX "Report_orgId_createdAt_idx" ON "Report"("orgId", "createdAt");
+ALTER TABLE "Approval" ADD CONSTRAINT "Approval_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
+ALTER TABLE "Report" ADD CONSTRAINT "Report_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
 `;
 
 const MIGRATE_SQL = `

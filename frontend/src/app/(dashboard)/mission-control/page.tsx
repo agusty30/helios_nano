@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
-import { commandSuggestions, timelineEvents, agents } from "@/lib/mock-data";
 import type { CanvasMetrics, AgentRouteResponse } from "@/lib/types";
 import {
   Send, Sparkles, CheckCircle2, Clock, Loader2, Bot, XCircle,
@@ -32,6 +31,29 @@ const MOCK_CANVAS: CanvasMetrics = {
   requests_today: 1847, budget_remaining: 7.16, circuit_breaker: false, chain: "Arc Testnet (5042002)",
 };
 
+const commandSuggestions = [
+  "Reduce cloud spending by 15%",
+  "Pay all approved invoices",
+  "Optimize marketing budget for Q3",
+  "Find and cancel duplicate subscriptions",
+];
+
+const timelineEvents = [
+  { time: "08:00", agent: "Budget Agent", action: "Anomaly Detected", detail: "AWS cost spike: EC2 instances running 3x normal capacity", status: "completed" as const },
+  { time: "08:03", agent: "Procurement Agent", action: "Negotiation Started", detail: "Initiated reserved instance pricing negotiation with AWS", status: "completed" as const, savings: 450 },
+  { time: "08:07", agent: "Treasury Agent", action: "Funds Allocated", detail: "Reserved $13,500 from operating budget for annual commitment", status: "completed" as const },
+  { time: "08:10", agent: "Payment Agent", action: "Payment Executed", detail: "Executed payment via Circle Gateway — gas-free settlement", status: "completed" as const, savings: 450 },
+  { time: "08:15", agent: "Budget Agent", action: "Monitoring", detail: "Continuous cost monitoring re-engaged for all cloud providers", status: "in_progress" as const },
+];
+
+interface DbAgent {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  config: { icon?: string; description?: string };
+}
+
 interface TaskStep {
   step: number;
   action: string;
@@ -57,6 +79,7 @@ export default function MissionControlPage() {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [mode, setMode] = useState<"agent" | "task">("task");
+  const [dbAgents, setDbAgents] = useState<DbAgent[]>([]);
 
   const fetchMetrics = useCallback(() => api.fetchCanvasMetrics(), []);
   const metrics = useApi(fetchMetrics, MOCK_CANVAS, 10000);
@@ -65,6 +88,10 @@ export default function MissionControlPage() {
     fetch("/api/tasks?limit=20")
       .then((r) => (r.ok ? r.json() : { tasks: [] }))
       .then((data) => setTasks(data.tasks || []))
+      .catch(() => {});
+    fetch("/api/agents")
+      .then((r) => (r.ok ? r.json() : { agents: [] }))
+      .then((data) => setDbAgents(data.agents || []))
       .catch(() => {});
   }, []);
 
@@ -345,27 +372,33 @@ export default function MissionControlPage() {
               </div>
             )}
             <div className="space-y-3">
-              {agents.map((a) => {
+              {dbAgents.map((a) => {
                 const Icon = agentIcon[a.name] || Bot;
+                const isActive = a.status === "active";
                 return (
                   <div key={a.id} className="p-3 rounded-lg bg-white/[0.02] border border-border hover:border-primary/20 transition-colors">
                     <div className="flex items-center gap-2 mb-2">
                       <Icon size={14} className="text-primary-light" />
                       <span className="text-[12px] font-medium text-foreground flex-1">{a.name}</span>
-                      <div className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
-                      </div>
+                      {isActive ? (
+                        <div className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+                        </div>
+                      ) : (
+                        <span className="inline-flex rounded-full h-2 w-2 bg-muted-dark" />
+                      )}
                     </div>
-                    <p className="text-[11px] text-muted truncate">{a.currentTask}</p>
+                    <p className="text-[11px] text-muted truncate capitalize">{a.type} agent</p>
                     <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-dark">
-                      <span>{a.successRate}% success</span>
-                      <span>·</span>
-                      <span>{a.lastActivity}</span>
+                      <span className={isActive ? "text-success" : "text-muted-dark"}>{a.status}</span>
                     </div>
                   </div>
                 );
               })}
+              {dbAgents.length === 0 && (
+                <p className="text-[11px] text-muted-dark text-center py-4">No agents configured</p>
+              )}
             </div>
           </motion.div>
         </div>

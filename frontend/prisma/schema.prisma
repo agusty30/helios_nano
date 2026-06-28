@@ -50,6 +50,8 @@ model Organization {
   tasks           Task[]
   transactions    Transaction[]
   settings        Setting[]
+  approvals       Approval[]
+  reports         Report[]
 }
 
 // --- Auth Models (NextAuth.js + custom) ---
@@ -296,4 +298,39 @@ model Transaction {
 
   @@index([orgId, createdAt])
   @@index([walletId])
+}
+
+model Approval {
+  id               String    @id @default(cuid())
+  orgId            String
+  requesterId      String?
+  amount           Float
+  vendor           String
+  reason           String
+  status           String    @default("pending")
+  aiRecommendation String    @default("review")
+  confidence       Float     @default(0.5)
+  department       String    @default("General")
+  createdAt        DateTime  @default(now())
+  resolvedAt       DateTime?
+  resolvedBy       String?
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@index([status])
+}
+
+model Report {
+  id        String   @id @default(cuid())
+  orgId     String
+  type      String
+  name      String
+  status    String   @default("generating")
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
 }

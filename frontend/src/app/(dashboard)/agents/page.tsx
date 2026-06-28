@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { cn, formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
-import { agents } from "@/lib/mock-data";
 import type { CanvasMetrics } from "@/lib/types";
 import {
   CreditCard, ShoppingCart, Landmark, Wallet, Bot,
@@ -17,14 +16,41 @@ const iconMap: Record<string, React.FC<{ size?: number; className?: string }>> =
 };
 
 const MOCK_CANVAS: CanvasMetrics = {
-  wallet_address: "0x...", usdc_balance: 7.16, active_throughput: 0,
-  last_route: "cheap_tier", daily_spend: 2.84, total_saved: 42.38,
-  requests_today: 1847, budget_remaining: 7.16, circuit_breaker: false, chain: "Arc Testnet (5042002)",
+  wallet_address: "0x...", usdc_balance: 0, active_throughput: 0,
+  last_route: "—", daily_spend: 0, total_saved: 0,
+  requests_today: 0, budget_remaining: 0, circuit_breaker: false, chain: "Arc Testnet (5042002)",
 };
 
+interface DbAgent {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  config: { icon?: string; description?: string };
+  createdAt: string;
+}
+
 export default function AgentsPage() {
+  const [dbAgents, setDbAgents] = useState<DbAgent[]>([]);
+  const [dbLoaded, setDbLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/agents")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.agents) {
+          setDbAgents(data.agents);
+          setDbLoaded(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const fetchMetrics = useCallback(() => api.fetchCanvasMetrics(), []);
   const metrics = useApi(fetchMetrics, MOCK_CANVAS, 10000);
+
+  const activeCount = dbAgents.filter(a => a.status === "active").length;
+  const totalCount = dbAgents.length;
 
   return (
     <div className="space-y-6">
@@ -33,14 +59,13 @@ export default function AgentsPage() {
           <h1 className="text-2xl font-bold text-foreground">AI Agents</h1>
           <p className="text-sm text-muted-dark mt-1">Monitor and manage your autonomous financial agents</p>
         </div>
-        {metrics.isLive ? (
+        {dbLoaded || metrics.isLive ? (
           <span className="flex items-center gap-1.5 text-[11px] font-medium text-success"><Wifi size={12} /> Live</span>
         ) : (
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Demo</span>
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Loading...</span>
         )}
       </div>
 
-      {/* Live routing metrics */}
       {metrics.isLive && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -60,10 +85,10 @@ export default function AgentsPage() {
 
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Total Agents", value: "4", icon: Bot, color: "text-primary-light" },
-          { label: "Active Now", value: metrics.data.circuit_breaker ? "0/4" : "4/4", icon: Activity, color: metrics.data.circuit_breaker ? "text-danger" : "text-success" },
-          { label: "Avg Success Rate", value: "97.9%", icon: CheckCircle2, color: "text-success" },
-          { label: "Total Savings", value: metrics.isLive ? formatCurrency(metrics.data.total_saved) : "$64,100", icon: TrendingUp, color: "text-primary-light" },
+          { label: "Total Agents", value: totalCount.toString() || "0", icon: Bot, color: "text-primary-light" },
+          { label: "Active Now", value: `${activeCount}/${totalCount}`, icon: Activity, color: activeCount > 0 ? "text-success" : "text-muted-dark" },
+          { label: "Requests Today", value: metrics.isLive ? metrics.data.requests_today.toLocaleString() : "—", icon: CheckCircle2, color: "text-success" },
+          { label: "Total Savings", value: metrics.isLive ? formatCurrency(metrics.data.total_saved) : "—", icon: TrendingUp, color: "text-primary-light" },
         ].map((s, i) => (
           <motion.div
             key={s.label}
@@ -82,8 +107,14 @@ export default function AgentsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {agents.map((agent, i) => {
-          const Icon = iconMap[agent.icon] || Bot;
+        {dbAgents.length === 0 && !dbLoaded ? (
+          <div className="col-span-2 text-center py-12 text-[13px] text-muted-dark">Loading agents...</div>
+        ) : dbAgents.length === 0 ? (
+          <div className="col-span-2 text-center py-12 text-[13px] text-muted-dark">No agents configured. Visit the dashboard to seed default agents.</div>
+        ) : dbAgents.map((agent, i) => {
+          const cfg = (agent.config || {}) as { icon?: string; description?: string };
+          const Icon = iconMap[cfg.icon || ""] || Bot;
+          const isActive = agent.status === "active";
           return (
             <motion.div
               key={agent.id}
@@ -100,42 +131,44 @@ export default function AgentsPage() {
                   <div>
                     <h3 className="text-[15px] font-semibold text-foreground">{agent.name}</h3>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <div className="relative flex h-1.5 w-1.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success" />
-                      </div>
-                      <span className="text-[10px] text-success font-medium uppercase tracking-wider">Active</span>
+                      {isActive ? (
+                        <>
+                          <div className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success" />
+                          </div>
+                          <span className="text-[10px] text-success font-medium uppercase tracking-wider">Active</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="inline-flex rounded-full h-1.5 w-1.5 bg-muted-dark" />
+                          <span className="text-[10px] text-muted-dark font-medium uppercase tracking-wider">{agent.status}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
-                <span className="text-[10px] text-muted-dark">{agent.lastActivity}</span>
+                <span className="text-[10px] text-muted-dark">{new Date(agent.createdAt).toLocaleDateString()}</span>
               </div>
 
               <div className="mb-4 p-3 rounded-lg bg-white/[0.02] border border-border">
                 <div className="flex items-center gap-2 mb-1">
                   <Zap size={12} className="text-primary-light" />
-                  <span className="text-[11px] text-muted-dark">Current Task</span>
+                  <span className="text-[11px] text-muted-dark">Type</span>
                 </div>
-                <p className="text-[13px] text-foreground">{agent.currentTask}</p>
+                <p className="text-[13px] text-foreground capitalize">{agent.type}</p>
+                {cfg.description && <p className="text-[11px] text-muted-dark mt-1">{cfg.description}</p>}
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-[10px] text-muted-dark block mb-0.5">Success Rate</span>
-                  <span className="text-sm font-semibold text-foreground">{agent.successRate}%</span>
+                  <span className="text-[10px] text-muted-dark block mb-0.5">Status</span>
+                  <span className={cn("text-sm font-semibold capitalize", isActive ? "text-success" : "text-muted-dark")}>{agent.status}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-muted-dark block mb-0.5">Transactions</span>
-                  <span className="text-sm font-semibold text-foreground">{agent.transactionsExecuted.toLocaleString()}</span>
+                  <span className="text-[10px] text-muted-dark block mb-0.5">Created</span>
+                  <span className="text-sm font-semibold text-foreground">{new Date(agent.createdAt).toLocaleDateString()}</span>
                 </div>
-                <div>
-                  <span className="text-[10px] text-muted-dark block mb-0.5">Savings</span>
-                  <span className="text-sm font-semibold text-success">{formatCurrency(agent.savings)}</span>
-                </div>
-              </div>
-
-              <div className="mt-4 w-full bg-white/5 rounded-full h-1.5">
-                <div className="bg-gradient-to-r from-primary to-primary-light h-1.5 rounded-full transition-all" style={{ width: `${agent.successRate}%` }} />
               </div>
             </motion.div>
           );
