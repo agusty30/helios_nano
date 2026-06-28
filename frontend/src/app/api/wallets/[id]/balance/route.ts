@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, handleAuthError } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
+const ARC_TESTNET_RPC = process.env.ARC_TESTNET_RPC
+  || "https://rpc.testnet.arc-node.thecanteenapp.com/v1/swrm_3aa8a9334770e6eddb5cc05f2e3dbfe555eca270d4eb78fbb4b6056a4a04e2b0";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -18,12 +21,8 @@ export async function GET(
       return NextResponse.json({ error: "Wallet not found" }, { status: 404 });
     }
 
-    const rpcUrl = process.env.ARC_TESTNET_RPC || "https://rpc-gel-sepolia.inkonchain.com";
-
     try {
-      const paddedAddress = "0x" + wallet.address.slice(2).padStart(64, "0");
-
-      const response = await fetch(rpcUrl, {
+      const response = await fetch(ARC_TESTNET_RPC, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

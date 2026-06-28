@@ -52,44 +52,44 @@ export async function POST(request: NextRequest) {
       data: { orgId: org.id },
     });
 
-    const hasResendKey = !!process.env.RESEND_API_KEY;
+    const code = crypto.randomInt(100000, 999999).toString();
+    const codeHash = await bcrypt.hash(code, 10);
 
-    if (hasResendKey) {
-      const code = crypto.randomInt(100000, 999999).toString();
-      const codeHash = await bcrypt.hash(code, 10);
+    await prisma.emailVerification.create({
+      data: {
+        userId: user.id,
+        codeHash,
+        expires: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
 
-      await prisma.emailVerification.create({
-        data: {
-          userId: user.id,
-          codeHash,
-          expires: new Date(Date.now() + 10 * 60 * 1000),
-        },
+    let emailSent = false;
+    try {
+      const result = await sendVerificationEmail(email, code, firstName);
+      emailSent = !!(result?.data?.id);
+    } catch (emailErr) {
+      console.error("Email send error:", emailErr);
+    }
+
+    if (!emailSent) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: new Date() },
       });
-
-      try {
-        await sendVerificationEmail(email, code, firstName);
-      } catch (emailErr) {
-        console.error("Email send error:", emailErr);
-      }
 
       return NextResponse.json({
         success: true,
-        message: "Account created. Check your email for the verification code.",
+        message: "Account created successfully. You can now sign in.",
         email: user.email,
-        requireVerification: true,
+        requireVerification: false,
       }, { status: 201 });
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { emailVerified: new Date() },
-    });
-
     return NextResponse.json({
       success: true,
-      message: "Account created successfully. You can now sign in.",
+      message: "Account created. Check your email for the verification code.",
       email: user.email,
-      requireVerification: false,
+      requireVerification: true,
     }, { status: 201 });
   } catch (error: unknown) {
     console.error("Register error:", error);
