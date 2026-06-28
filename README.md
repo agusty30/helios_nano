@@ -1,295 +1,274 @@
-# helios_nano
+# HeliOS
 
-**An autonomous AI agent that discovers and pays for x402 services on its own** —
-with its own wallet, Circle Gateway nanopayments down to **$0.000001**, gas-free
-batched settlement in **<500ms**, cross-chain USDC, and built-in compliance
-guardrails. Targets **Arc Testnet**, where USDC is the native gas token.
+**AI-powered autonomous payment platform for managing wallets, agents, API costs, and financial operations** — built on Next.js 15, PostgreSQL, and on-chain USDC settlement via Circle Gateway on Arc Testnet.
 
-🟢 **Live demo:** https://heliosnano-pay.up.railway.app — open `/` for the
-browser buyer + payment trace, `/nano` for the $0.000001 paywall, `/health` for
-the liveness probe.
-
-```bash
-# Pay the live endpoint from the agent (needs a funded Arc-Testnet key):
-WORKER_TARGET_URL=https://heliosnano-pay.up.railway.app/nano \
-  PRIVATE_KEY=<funded-key> npm run agent:worker
-# → ✓ settled $0.000001 on arcTestnet … settlement <uuid>
-```
-
-
-It ships as one repo with three parts:
-
-1. **The agent** (`agent/`) — the headline. Generates its own wallet, probes
-   URLs / the Circle marketplace for x402 paywalls, vets every payment against
-   spend caps + allow/block lists, settles via Circle Gateway, and writes an
-   append-only audit ledger. Has a `doctor` readiness check and a one-command
-   end-to-end smoke test.
-2. **A paywall server** (`server.ts`) — a tiny x402 seller exposing
-   `/hello-world` ($0.01) and `/nano` ($0.000001) so the agent has a real,
-   traceable target.
-3. **A payment-trace explainer** (`decode-batch.ts`, `public/buyer.html`) —
-   unpacks the on-chain Gateway `submitBatch` tx and renders the full settlement
-   lifecycle step by step.
+**Live:** https://helios-pay.up.railway.app
 
 ---
 
-## Why it matters
+## What it does
 
-x402 + stablecoin micropayments let an agent pay per API call in USDC with **no
-API keys, no signup, no prefunded billing**. helios_nano turns that into an
-autonomous loop: *search for a capability → check the price → pay if it's within
-policy → use the result*, all without a human in the loop and all auditable
-after the fact.
+HeliOS is a financial operating system where AI agents autonomously manage payments, track API spending, and enforce budget policies — all with human-in-the-loop approvals and full audit trails.
 
-| Capability | How |
+| Capability | Details |
 |---|---|
-| **Own wallet** | secp256k1 key generated + persisted on first run (`viem`) |
-| **Service discovery** | `probe(url)` decodes 402 challenges; `circle services search` for the marketplace |
-| **Nanopayments** | down to `$0.000001` (1 USDC atomic unit) |
-| **Gas-free + batched** | Circle Gateway: sign EIP-712 off-chain → facilitator settles → relayer batches the on-chain tx |
-| **<500ms settlement** | Gateway returns a settlement UUID near-instantly; on-chain batch follows |
-| **Cross-chain** | one `GatewayClient` per funded chain, unified balance, instant rebalancing |
-| **Compliance guardrails** | per-payment / hourly / daily caps, host allow/block lists, category screening |
-| **Auditability** | every decision (allowed/denied/settled/failed) appended to a JSONL ledger |
+| **Multi-agent system** | 4 agent types (Budget, Payment, Treasury, Operations) with task queues and wallet assignments |
+| **Mission Control** | Natural language command interface — 17 command types parsed and executed against live data |
+| **API Cost Management** | Track vendors, services, and usage across providers with daily/monthly analytics and budget alerts |
+| **On-chain wallets** | USDC balance queries via RPC, treasury and agent wallet management |
+| **RBAC** | Role-based access (Admin / Finance / Viewer) enforced on every API route |
+| **Notifications** | Real-time bell notifications with unread counts, mark-read, 30s auto-refresh |
+| **x402 Nanopayments** | Circle Gateway settlement down to $0.000001, gas-free batched on-chain via FastAPI backend |
+| **61 unit tests** | Vitest test suite covering command parsing, input validation, and rate limiting |
 
 ---
 
-## Quick start (local, no Docker)
+## Tech stack
 
-```bash
-npm install
-
-# 1. Readiness check — expect all ✓ and "READY"
-npm run agent -- doctor
-
-# 2. Create / show the agent's wallet (persists agent/.agent-key on first run)
-npm run agent -- wallet
-#    Fund it with testnet USDC: https://faucet.circle.com/
-#    then deposit into Gateway for nanopayments (see "Funding" below).
-
-# 3. Full end-to-end smoke test (boots the server, pays /nano, checks the ledger)
-npm run agent:smoke           # → "SMOKE: PASS", exit 0 when live-ready
-
-# 4. Or drive it by hand: run the server in one terminal…
-npm start                     # serves /hello-world and /nano on :3000
-#    …and in another:
-npm run agent -- discover http://localhost:3000/nano
-npm run agent -- pay http://localhost:3000/nano
-npm run agent -- audit
-```
-
-**Prerequisites:** Node 20+ (22 LTS recommended). An Arc Testnet wallet funded
-with testnet USDC.
-
----
-
-## Quick start (Docker)
-
-The image runs the paywall server by default and the agent CLI on demand.
-
-```bash
-cp .env.example .env          # optional: set PRIVATE_KEY, guardrails, etc.
-
-# Paywall server live on http://localhost:3000
-docker compose up --build server
-
-# Agent commands (separate terminal) — note the service hostname `server`:
-docker compose run --rm agent doctor
-docker compose run --rm agent pay http://server:3000/nano
-docker compose run --rm agent audit
-
-# Full smoke test inside the container:
-docker compose run --rm --entrypoint npm agent run agent:smoke
-```
-
-The agent's wallet key and audit ledger persist in the `agent-data` Docker
-volume (`/data/.agent-key`, `/data/ledger.jsonl`) — kept out of the image and
-out of git. For hosting, set `PRIVATE_KEY` in the environment instead and the
-agent uses that key directly.
-
-### Deploy as a hosted service
-
-The same image runs anywhere that takes a container (Railway, Fly.io, Render,
-ECS, a VM). It listens on `$PORT` (Railway/most PaaS inject this; defaults to
-3000) and exposes an unauthenticated `GET /health` liveness probe.
-
-**Railway** (config in `railway.json`):
-
-```bash
-npm i -g @railway/cli
-railway login
-railway init                 # link/create a project
-railway up                   # builds the Dockerfile and deploys
-
-# Optional env (all have sane defaults in agent/config.ts):
-railway variables set AGENT_DOH=1
-railway variables set ARC_TESTNET_RPC=<your-arc-rpc>
-```
-
-Railway auto-detects the `Dockerfile`, runs `npm start` (the paywall server),
-and healthchecks `/health`. The **server needs no secrets** — it validates
-payments via Circle's facilitator and never signs. Only set `PRIVATE_KEY` if you
-later wrap the *agent* (buyer) as a long-running service; for that, add it as a
-Railway secret rather than an env var.
-
-CI/CD: pushes to `main` run typecheck + Docker build via GitHub Actions
-(`.github/workflows/ci.yml`); the live smoke test runs there too if you add a
-funded Arc-Testnet key as the `AGENT_PRIVATE_KEY` repo secret.
-
-### Scheduled buyer (Railway cron / any timer)
-
-`agent/worker.ts` pays a target endpoint once and exits — drop it on a schedule
-to have the agent autonomously buy a resource on a timer, inside the guardrails.
-
-Locally:
-
-```bash
-docker compose up -d server
-docker compose run --rm \
-  -e PRIVATE_KEY=<funded-key> \
-  -e WORKER_TARGET_URL=http://server:3000/nano \
-  worker            # → "✓ settled $0.000001 … settlement <uuid>", exit 0
-```
-
-On Railway: add a **second service** from the same repo, set its **Custom Start
-Command** to `npm run agent:worker` and a **Cron Schedule** (e.g. `0 * * * *`
-for hourly), then set the variables:
-
-| Variable | Value |
+| Layer | Technology |
 |---|---|
-| `WORKER_TARGET_URL` | the x402 resource to buy (e.g. your server's `/nano`) |
-| `PRIVATE_KEY` | a **funded** Arc-Testnet key (Railway **secret**) |
-| `WORKER_METHOD` | `GET` or `POST` (optional, default GET) |
-| `AGENT_MAX_PER_PAYMENT` | hard per-run spend cap (recommended) |
-
-Cron boxes are ephemeral, so the rolling hourly/daily caps reset each run unless
-you attach a volume at `AGENT_LEDGER_PATH` — rely on `AGENT_MAX_PER_PAYMENT` as
-the firm limit there.
-
-
+| **Frontend** | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS |
+| **Database** | PostgreSQL + Prisma ORM (24 models) |
+| **Auth** | NextAuth.js v5 (beta.31) with PrismaAdapter, JWT sessions, bcrypt |
+| **Backend** | FastAPI (Python) with LLM routing (OpenAI / Anthropic / OpenRouter) |
+| **Payments** | Circle Gateway x402 protocol on Arc Testnet (chainId 5042002) |
+| **Charts** | Recharts for cost analytics visualizations |
+| **Validation** | Zod v4 (11 schemas) |
+| **Testing** | Vitest v4.1.9 |
+| **CI/CD** | GitHub Actions (lint, type-check, test, build) |
+| **Hosting** | Railway (frontend auto-deploy on push, backend manual deploy) |
 
 ---
 
 ## Architecture
 
 ```
-agent/
-  config.ts      constants, guardrail + agent config, the $0.000001 floor
-  wallet.ts      generate / load the agent's own key (self-custody via viem)
-  net.ts         DNS-over-HTTPS resolver (bypasses ISP hijacking of *.circle.com)
-  ledger.ts      append-only JSONL audit log + rolling-window spend math
-  guardrails.ts  policy gate: amount caps, allow/block lists, categories
-  discovery.ts   probe(url) for 402 challenges + Circle marketplace search
-  skills.ts      pluggable skill registry + two built-in skills
-  agent.ts       CircleAgent: wallet + guardrails + Gateway pay + cross-chain
-  doctor.ts      readiness check (wallet, RPC, Gateway API, balances)
-  smoke.ts       end-to-end CI gate: doctor → discover → pay → audit
-  cli.ts         command-line entry point
-  index.ts       library barrel for `import { CircleAgent }`
+frontend/                          Next.js 15 App Router
+  src/
+    app/
+      (dashboard)/
+        page.tsx                   Dashboard — KPIs, recent activity, charts
+        agents/page.tsx            Agent fleet — status, tasks, wallets
+        mission-control/page.tsx   NL command interface with task execution
+        wallets/page.tsx           Wallet management with on-chain balances
+        transactions/page.tsx      Transaction history with approvals
+        api-costs/page.tsx         Vendor/service cost tracking + analytics
+        settings/page.tsx          Org settings, policies, team (auto-save)
+        team/page.tsx              Team member management with RBAC
+        reports/page.tsx           Financial reports
+        approvals/page.tsx         Approval queue
+      api/
+        auth/[...nextauth]/        NextAuth.js endpoints
+        auth/register/             Registration with rate limiting
+        agents/                    Agent CRUD (ADMIN only)
+        wallets/                   Wallet CRUD + balance queries
+        wallets/[id]/balance/      On-chain USDC balance via RPC
+        transactions/              Transaction management
+        tasks/                     Task execution (17 command handlers)
+        vendors/                   Vendor management (FINANCE+)
+        api-services/              API service configs (FINANCE+)
+        api-costs/                 Aggregated cost analytics
+        notifications/             Notification CRUD + mark-read
+        health/                    Liveness + DB migration runner
+        ready/                     DB connectivity check
+        metrics/                   System metrics (entity counts, uptime, memory)
+    lib/
+      session.ts                   RBAC helpers (requireAuth, requireRole)
+      command-parser.ts            17 NL command patterns
+      validation.ts                11 Zod input schemas
+      rate-limit.ts                In-memory rate limiter
+      api.ts                       API client methods
+      types.ts                     TypeScript interfaces
+    components/
+      layout/Sidebar.tsx           Navigation with role-aware items
+      ui/NotificationBell.tsx      Real-time notification dropdown
+      ui/ErrorBoundary.tsx         Error boundary with recovery
 
-server.ts          x402 paywall server (/hello-world $0.01, /nano $0.000001)
-buyer.ts           minimal CLI buyer (pay from a raw private key)
-decode-batch.ts    decode an on-chain Gateway submitBatch tx
-public/buyer.html  browser buyer + step-by-step payment trace UI
+backend/                           FastAPI Python service
+  main.py                          x402 payment endpoints, LLM routing
+  task_runner.py                   Agent task execution
 ```
 
-### How a payment flows
+### Database schema (24 models)
 
-1. `agent.pay(url)` probes the URL, reads the `402` challenge, and decodes the
-   exact price/seller/network — no money moves yet.
-2. The price + host + category go through `Guardrails.check()`, which consults
-   the ledger for rolling hourly/daily spend. A denial is logged and returned
-   as `{ ok: false, reason }`; the agent never signs.
-3. If allowed, the chain's `GatewayClient` signs the EIP-712 authorization and
-   submits it to Circle's facilitator. A settlement UUID returns in <500ms and
-   is logged as `settled`.
-4. Circle's relayer later batches that settlement into one on-chain
-   `submitBatch` tx — which `decode-batch.ts` and `public/buyer.html` can unpack.
+Core: `User`, `Organization`, `Account`, `Session`, `VerificationToken`
+Financial: `Wallet`, `Transaction`, `Approval`, `Report`
+Agents: `Agent`, `Task`, `AuditLog`
+API Cost Management: `Vendor`, `Subscription`, `ApiService`, `ApiUsage`, `BudgetRule`
+System: `Notification`, `TeamMember`, `SpendingPolicy`, `OrganizationSettings`
 
 ---
 
-## Funding the agent
+## Getting started
+
+### Prerequisites
+
+- Node.js 20+
+- PostgreSQL database
+- npm
+
+### Local development
 
 ```bash
-# 1. Fund the agent's address with testnet USDC
-npm run agent -- wallet                 # prints the address
-#    → https://faucet.circle.com/
+cd frontend
+npm install
+npx prisma generate
 
-# 2. Deposit into Circle Gateway for nanopayments (one-time, on-chain)
-#    Either via the Circle CLI…
-CIRCLE_ACCEPT_TERMS=1 circle gateway deposit \
-  --amount 1 --address <agent-address> --chain ARC-TESTNET --method direct
-#    …or the agent already holds the key, so a GatewayClient deposit works too.
+# Set environment variables
+cp .env.example .env.local
+# Required: DATABASE_URL, NEXTAUTH_SECRET, NEXTAUTH_URL
 
-# 3. Confirm
-npm run agent -- balances
+npm run dev
+```
+
+### Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `NEXTAUTH_SECRET` | Yes | JWT signing secret |
+| `NEXTAUTH_URL` | Yes | App URL (e.g. `http://localhost:3000`) |
+| `NEXT_PUBLIC_BACKEND_URL` | No | FastAPI backend URL |
+| `RESEND_API_KEY` | No | Email notifications via Resend |
+
+---
+
+## API endpoints
+
+### Public (no auth)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/health` | Liveness check + migration status |
+| `GET` | `/api/ready` | Database connectivity check |
+| `GET` | `/api/metrics` | System metrics (entity counts, uptime, memory) |
+| `*` | `/api/auth/*` | NextAuth.js authentication |
+
+### Protected (requires auth)
+
+| Method | Path | Role | Description |
+|---|---|---|---|
+| `GET/POST` | `/api/agents` | Admin | Agent fleet management |
+| `GET/POST` | `/api/wallets` | Any | Wallet CRUD |
+| `GET` | `/api/wallets/[id]/balance` | Any | On-chain USDC balance query |
+| `GET/POST` | `/api/transactions` | Any | Transaction history |
+| `GET/POST` | `/api/tasks` | Any | Execute commands (17 types) |
+| `GET/POST` | `/api/vendors` | Finance+ | Vendor management |
+| `GET/POST` | `/api/api-services` | Finance+ | API service configs |
+| `GET/POST` | `/api/api-costs` | Any | Cost analytics + usage recording |
+| `GET/POST` | `/api/notifications` | Any | Notifications + mark-read |
+| `GET/PUT` | `/api/approvals/[id]` | Finance+ | Approval actions |
+| `GET/POST` | `/api/reports` | Any | Report generation |
+
+---
+
+## Mission Control commands
+
+The command parser recognizes 17 natural language patterns:
+
+```
+run tests                          Execute test suite
+check status                       System health overview
+allocate budget $50                Set budget allocation
+optimize costs                     Analyze spending for savings
+record OpenAI api cost $1.50       Log API usage cost
+create vendor Anthropic            Add a new vendor
+create service GPT-4 on OpenAI     Register API service
+show api costs last 30 days        View cost analytics
+list agents                        Show agent fleet
+list vendors                       Show all vendors
+list services                      Show API services
+list wallets                       Show wallet balances
+generate report                    Compile financial report
 ```
 
 ---
 
-## Guardrail configuration
+## Testing
 
-Defaults live in `DEFAULT_GUARDRAILS` (`agent/config.ts`) and can be overridden
-per-run via environment variables:
+```bash
+cd frontend
 
-| Env var | Meaning | Default |
-|---|---|---|
-| `AGENT_MAX_PER_PAYMENT` | reject any single payment above this (USDC) | `1.0` |
-| `AGENT_MAX_PER_HOUR` | rolling 1-hour spend ceiling | `5.0` |
-| `AGENT_MAX_PER_DAY` | rolling 24-hour spend ceiling | `20.0` |
-| `AGENT_ALLOWED_HOSTS` | comma-separated allowlist (empty = any) | _(empty)_ |
-| `AGENT_BLOCKED_HOSTS` | comma-separated blocklist | _(empty)_ |
-| `AGENT_KEY_PATH` | where the agent's key is stored | `agent/.agent-key` |
-| `AGENT_LEDGER_PATH` | audit ledger path | `agent/ledger.jsonl` |
-| `PRIVATE_KEY` | use this key instead of the persisted file | _(unset)_ |
-| `AGENT_DOH` | DNS-over-HTTPS bypass on/off | `1` |
+# Run all 61 tests
+npm test
 
-The `$0.000001` per-payment floor is fixed (not overridable) — it permits true
-nanopayments while blocking fee-dust griefing.
+# Watch mode
+npm run test:watch
 
----
+# Type check
+npm run lint
+```
 
-## Readiness & testing
-
-- **`npm run agent -- doctor`** — PASS/WARN/FAIL per dependency (wallet, RPC,
-  Gateway API, balances, guardrails) and a `READY` / `NOT READY` verdict
-  (exit 1 on any hard FAIL).
-- **`npm run agent:smoke`** — boots the server and runs the full live path
-  (doctor → discover → pay → audit). Exits `0` only if a real `$0.000001`
-  nanopayment settled. Drop it into CI as a pre-deploy gate.
-- **`npm run agent:typecheck`** — strict TypeScript check across the agent and
-  the root entrypoints.
+Test coverage:
+- `command-parser.test.ts` — 26 tests for all 17 command patterns
+- `validation.test.ts` — 31 tests for all 11 Zod schemas
+- `rate-limit.test.ts` — 4 tests for rate limiter behavior
 
 ---
 
-## Troubleshooting: "Circle Gateway API unreachable (fetch failed)"
+## CI/CD
 
-If `doctor` shows `✗ Circle Gateway API … fetch failed` despite working
-internet, your network is probably **hijacking DNS for `*.circle.com`** (some
-ISP content filters resolve `gateway-api-testnet.circle.com` to a filter box
-with a bogus TLS cert). helios_nano fixes this automatically: `agent/net.ts`
-resolves `*.circle.com` over **DNS-over-HTTPS** (Cloudflare / Google) and
-connects to the real IP with the correct TLS SNI. It's wired into every
-entrypoint, so no action is needed; toggle with `AGENT_DOH=0/1`.
+GitHub Actions runs on every push to `main` and on pull requests:
 
-The standalone `circle` CLI is a separate binary this fix can't patch — on a
-hijacking network add `104.18.26.249 gateway-api-testnet.circle.com` to
-`/etc/hosts`, or use a VPN.
+1. Install dependencies
+2. Generate Prisma client
+3. Type check (`tsc --noEmit`)
+4. Run tests (`vitest`)
+5. Build (`next build`)
 
-See **`agent/README.md`** for the deep-dive on the agent internals, skills, and
-the payment lifecycle walkthrough.
+See `.github/workflows/ci.yml`.
 
 ---
 
-## Security notes
+## Deployment
 
-- The agent key is **self-custody and testnet-only**. It's gitignored
-  (`agent/.agent-key`) and never baked into the Docker image. Use a throwaway
-  key; never point `PRIVATE_KEY` at a mainnet wallet.
-- The audit ledger (`agent/ledger.jsonl`) is gitignored too.
-- Guardrails are enforced before signing, but they are a policy layer, not a
-  custody boundary — keep balances small on testnet.
+### Railway
+
+The frontend auto-deploys from GitHub on push to `main`. The backend deploys manually:
+
+```bash
+# Install Railway CLI
+npm i -g @railway/cli
+
+# Login and deploy backend
+railway login
+~/.railway/bin/railway up ./backend --path-as-root --service backend-helios --detach -y
+```
+
+**Production URLs:**
+- Frontend: https://helios-pay.up.railway.app
+- Backend: https://back-helios-pay.up.railway.app
+
+### Health checks
+
+```bash
+# Frontend readiness
+curl https://helios-pay.up.railway.app/api/ready
+# → {"ready":true}
+
+# Backend health
+curl https://back-helios-pay.up.railway.app/health
+# → {"status":"healthy",...}
+
+# System metrics
+curl https://helios-pay.up.railway.app/api/metrics
+# → {"counts":{"users":2,"organizations":2,...},"uptime":...}
+```
+
+---
+
+## Security
+
+- RBAC enforced on all API routes (Admin / Finance / Viewer hierarchy)
+- Rate limiting on auth endpoints (3/min register, 5/min login)
+- Input validation via Zod on all POST/PUT bodies
+- Security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+- Passwords hashed with bcrypt (10 rounds)
+- JWT session strategy with secure token handling
+- API middleware blocks unauthenticated requests (except public endpoints)
+
+---
 
 ## License
 
-ISC.
+ISC
