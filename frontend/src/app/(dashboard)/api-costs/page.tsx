@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatUsdc } from "@/lib/utils";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -105,9 +105,9 @@ export default function ApiCostsPage() {
 
   const summary = data?.summary;
   const kpis = [
-    { label: "Total Spend", value: formatCurrency(summary?.totalCost || 0), icon: DollarSign, color: "text-primary-light" },
-    { label: "Daily Average", value: formatCurrency(summary?.dailyAvg || 0), icon: TrendingUp, color: "text-success" },
-    { label: "Projected Monthly", value: formatCurrency(summary?.projectedMonthly || 0), icon: Zap, color: "text-warning" },
+    { label: "Total Spend", value: formatUsdc(summary?.totalCost || 0, 4), icon: DollarSign, color: "text-primary-light" },
+    { label: "Daily Average", value: formatUsdc(summary?.dailyAvg || 0, 4), icon: TrendingUp, color: "text-success" },
+    { label: "Projected Monthly", value: formatUsdc(summary?.projectedMonthly || 0, 2), icon: Zap, color: "text-warning" },
     { label: "Total Requests", value: (summary?.totalRequests || 0).toLocaleString(), icon: Activity, color: "text-accent" },
   ];
 
@@ -169,7 +169,7 @@ export default function ApiCostsPage() {
             {data.alerts.map((alert) => (
               <div key={alert.id} className="flex items-center justify-between text-xs text-muted">
                 <span>{alert.name}</span>
-                <span className="text-warning font-medium">{alert.pct.toFixed(0)}% of {formatCurrency(alert.limit)} limit</span>
+                <span className="text-warning font-medium">{alert.pct.toFixed(0)}% of {formatUsdc(alert.limit, 2)} limit</span>
               </div>
             ))}
           </div>
@@ -191,11 +191,11 @@ export default function ApiCostsPage() {
               <AreaChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#6B7280" }} />
-                <YAxis tick={{ fontSize: 11, fill: "#6B7280" }} tickFormatter={(v) => `$${v}`} />
+                <YAxis tick={{ fontSize: 11, fill: "#6B7280" }} tickFormatter={(v) => `${v} USDC`} />
                 <Tooltip
                   contentStyle={{ background: "#1A1F2E", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
                   labelStyle={{ color: "#9CA3AF" }}
-                  formatter={(value: number) => [`$${value.toFixed(4)}`, "Cost"]}
+                  formatter={(value: number) => [`${value.toFixed(4)} USDC`, "Cost"]}
                 />
                 <Area type="monotone" dataKey="cost" stroke="#6366F1" fill="url(#costGradient)" strokeWidth={2} />
                 <defs>
@@ -240,7 +240,7 @@ export default function ApiCostsPage() {
                   </Pie>
                   <Tooltip
                     contentStyle={{ background: "#1A1F2E", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
-                    formatter={(value: number) => [`$${value.toFixed(4)}`, "Cost"]}
+                    formatter={(value: number) => [`${value.toFixed(4)} USDC`, "Cost"]}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -251,7 +251,7 @@ export default function ApiCostsPage() {
                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
                       <span className="text-muted">{p.name}</span>
                     </div>
-                    <span className="text-foreground font-medium">${p.value.toFixed(4)}</span>
+                    <span className="text-foreground font-medium">{p.value.toFixed(4)} USDC</span>
                   </div>
                 ))}
               </div>
@@ -292,7 +292,7 @@ export default function ApiCostsPage() {
                       </div>
                     </td>
                     <td className="py-3 pr-4 text-muted">{svc.provider}</td>
-                    <td className="py-3 pr-4 text-foreground">{svc.dailyBudget > 0 ? formatCurrency(svc.dailyBudget) : "—"}</td>
+                    <td className="py-3 pr-4 text-foreground">{svc.dailyBudget > 0 ? formatUsdc(svc.dailyBudget, 2) : "—"}</td>
                     <td className="py-3 pr-4">
                       <span className={cn(
                         "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
@@ -392,7 +392,7 @@ export default function ApiCostsPage() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-muted block mb-1">Daily Budget (USD)</label>
+                <label className="text-xs text-muted block mb-1">Daily Budget (USDC)</label>
                 <input
                   type="number"
                   value={newService.dailyBudget}

@@ -9,10 +9,14 @@ export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
 }
 
+export function formatUsdc(amount: number, decimals = 4): string {
+  return `${amount.toFixed(decimals)} USDC`;
+}
+
 export function formatCompact(amount: number): string {
-  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
-  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(1)}K`;
-  return formatCurrency(amount);
+  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M USDC`;
+  if (amount >= 1_000) return `${(amount / 1_000).toFixed(1)}K USDC`;
+  return formatUsdc(amount, 2);
 }
 
 export function formatPercent(value: number): string {

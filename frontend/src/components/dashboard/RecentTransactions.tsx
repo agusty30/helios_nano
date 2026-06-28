@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatUsdc } from "@/lib/utils";
 import type { Transaction } from "@/lib/types";
 import { ArrowUpRight, ArrowDownRight, Clock } from "lucide-react";
 
@@ -47,7 +47,7 @@ export default function RecentTransactions({ data }: { data: Transaction[] }) {
               <span className="text-[11px] text-muted-dark">{tx.agent} · {tx.category}</span>
             </div>
             <div className="text-right">
-              <span className="text-[13px] font-semibold font-mono text-foreground">{formatCurrency(tx.amount)}</span>
+              <span className="text-[13px] font-semibold font-mono text-foreground">{formatUsdc(tx.amount, 4)}</span>
               <span className="block text-[10px] text-muted-dark">{tx.timestamp}</span>
             </div>
           </div>

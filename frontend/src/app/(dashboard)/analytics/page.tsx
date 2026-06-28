@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
-import { formatCurrency } from "@/lib/utils";
+import { formatUsdc } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { BudgetStateResponse, CanvasMetrics } from "@/lib/types";
@@ -98,8 +98,8 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Spend", value: analytics ? formatCurrency(analytics.summary.totalSpend) : (budget.isLive ? formatCurrency(budget.data.spentToday) : "—"), sub: analytics ? `${analytics.summary.completedTransactions} completed txns` : "loading...", icon: PiggyBank, color: "text-success" },
-          { label: "AI Optimization", value: metrics.isLive ? formatCurrency(metrics.data.total_saved) : "—", sub: metrics.isLive ? "total savings from routing" : "connect backend for data", icon: Zap, color: "text-primary-light" },
+          { label: "Total Spend", value: analytics ? formatUsdc(analytics.summary.totalSpend, 2) : (budget.isLive ? formatUsdc(budget.data.spentToday, 4) : "—"), sub: analytics ? `${analytics.summary.completedTransactions} completed txns` : "loading...", icon: PiggyBank, color: "text-success" },
+          { label: "AI Optimization", value: metrics.isLive ? formatUsdc(metrics.data.total_saved, 2) : "—", sub: metrics.isLive ? "total savings from routing" : "connect backend for data", icon: Zap, color: "text-primary-light" },
           { label: "Budget Used", value: budget.isLive ? `${(budget.data.pctUsed * 100).toFixed(1)}%` : (analytics ? `${analytics.summary.transactionCount} txns` : "—"), sub: budget.isLive ? "budget utilization" : "total transactions", icon: TrendingDown, color: "text-success" },
           { label: "Active Agents", value: analytics ? analytics.summary.activeAgents.toString() : "—", sub: "autonomous agents running", icon: Shield, color: "text-primary-light" },
         ].map((card, i) => (
@@ -141,8 +141,8 @@ export default function AnalyticsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
                   <XAxis dataKey="month" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
-                  <Tooltip contentStyle={{ background: "#151B2E", border: "1px solid #1E293B", borderRadius: 8, fontSize: 12 }} formatter={(value: number) => [formatCurrency(value), undefined]} />
+                  <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v.toFixed(0)} USDC`} />
+                  <Tooltip contentStyle={{ background: "#151B2E", border: "1px solid #1E293B", borderRadius: 8, fontSize: 12 }} formatter={(value: number) => [formatUsdc(value, 4), undefined]} />
                   <Area type="monotone" dataKey="savings" stroke="#10B981" strokeWidth={2} fill="url(#gSav)" />
                   <Area type="monotone" dataKey="aiSavings" stroke="#4F46E5" strokeWidth={1.5} strokeDasharray="4 4" fill="none" />
                 </AreaChart>
@@ -198,9 +198,9 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-4 gap-6">
           {[
             { label: "Autonomous Payments", value: liveTraction.totalAutonomousPayments.toLocaleString(), detail: "Total processed" },
-            { label: "Avg Tx Size", value: `$${liveTraction.avgTransactionSize.toFixed(4)}`, detail: "Per transaction" },
+            { label: "Avg Tx Size", value: `${liveTraction.avgTransactionSize.toFixed(4)} USDC`, detail: "Per transaction" },
             { label: "Budget Utilization", value: `${liveTraction.budgetUtilizationEfficiency.toFixed(1)}%`, detail: "Allocation efficiency" },
-            { label: "Cost / Task", value: `$${liveTraction.costPerTaskCompleted.toFixed(4)}`, detail: "Per completed operation" },
+            { label: "Cost / Task", value: `${liveTraction.costPerTaskCompleted.toFixed(4)} USDC`, detail: "Per completed operation" },
           ].map((m) => (
             <div key={m.label} className="text-center p-4 rounded-lg bg-white/[0.02] border border-border">
               <span className="text-2xl font-bold text-foreground">{m.value}</span>

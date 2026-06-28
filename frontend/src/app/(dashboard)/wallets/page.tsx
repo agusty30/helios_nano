@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/Toast";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
   Wallet, Plus, Copy, ExternalLink, Loader2, Shield, Bot, X,
   ArrowRightLeft, ArrowDownToLine, ArrowUpFromLine, History,
-  AlertTriangle, CheckCircle2, Key, Import,
+  AlertTriangle, CheckCircle2, Key, Import, Trash2, Pencil, RefreshCw,
 } from "lucide-react";
 
 interface WalletRecord {
@@ -17,6 +18,9 @@ interface WalletRecord {
   type: string;
   chain: string;
   network: string;
+  status: string;
+  isDefault: boolean;
+  deletedAt: string | null;
   createdAt: string;
 }
 
@@ -38,13 +42,13 @@ interface WalletTx {
   createdAt: string;
 }
 
-type ModalType = "create" | "import" | "deposit" | "transfer" | "transactions" | null;
+type ModalType = "create" | "import" | "deposit" | "transfer" | "transactions" | "delete" | null;
 
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<WalletRecord[]>([]);
   const [balances, setBalances] = useState<Record<string, WalletBalance>>({});
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const [modal, setModal] = useState<ModalType>(null);
   const [selectedWallet, setSelectedWallet] = useState<WalletRecord | null>(null);
@@ -56,8 +60,17 @@ export default function WalletsPage() {
   const [keyCopied, setKeyCopied] = useState(false);
 
   // Import wallet state
-  const [importForm, setImportForm] = useState({ label: "", address: "", type: "AGENT" });
+  const [importForm, setImportForm] = useState({ label: "", privateKey: "", type: "AGENT" });
   const [importing, setImporting] = useState(false);
+  const [derivedAddress, setDerivedAddress] = useState<string | null>(null);
+
+  // Rename state
+  const [editingLabel, setEditingLabel] = useState<string | null>(null);
+  const [editLabelValue, setEditLabelValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
+
+  // Delete state
+  const [deleting, setDeleting] = useState(false);
 
   // Transfer state
   const [transferForm, setTransferForm] = useState({ toWalletId: "", amount: "", note: "" });
@@ -117,17 +130,63 @@ export default function WalletsPage() {
       const res = await fetch("/api/wallets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(importForm),
+        body: JSON.stringify({ label: importForm.label, privateKey: importForm.privateKey, type: importForm.type }),
       });
       const data = await res.json();
       if (data.wallet) {
         setWallets((prev) => [data.wallet, ...prev]);
         setModal(null);
-        setImportForm({ label: "", address: "", type: "AGENT" });
+        setImportForm({ label: "", privateKey: "", type: "AGENT" });
+        setDerivedAddress(null);
         fetchBalance(data.wallet.id);
+        toast("Wallet imported successfully", "success");
+      } else {
+        toast(data.error || "Import failed", "error");
       }
-    } catch {}
+    } catch {
+      toast("Failed to import wallet", "error");
+    }
     setImporting(false);
+  };
+
+  const handleRename = async (walletId: string) => {
+    if (!editLabelValue.trim()) return;
+    setRenaming(true);
+    try {
+      const res = await fetch(`/api/wallets/${walletId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: editLabelValue }),
+      });
+      const data = await res.json();
+      if (data.wallet) {
+        setWallets((prev) => prev.map((w) => (w.id === walletId ? { ...w, label: data.wallet.label } : w)));
+        toast("Wallet renamed", "success");
+      }
+    } catch {
+      toast("Failed to rename wallet", "error");
+    }
+    setEditingLabel(null);
+    setRenaming(false);
+  };
+
+  const handleDelete = async () => {
+    if (!selectedWallet) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/wallets/${selectedWallet.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        setWallets((prev) => prev.filter((w) => w.id !== selectedWallet.id));
+        toast("Wallet deleted", "success");
+        closeModal();
+      } else {
+        toast(data.error || "Delete failed", "error");
+      }
+    } catch {
+      toast("Failed to delete wallet", "error");
+    }
+    setDeleting(false);
   };
 
   const handleTransfer = async (e: React.FormEvent) => {
@@ -180,10 +239,9 @@ export default function WalletsPage() {
     setModal("deposit");
   };
 
-  const copyText = (text: string) => {
+  const copyText = (text: string, label = "Copied to clipboard") => {
     navigator.clipboard.writeText(text);
-    setCopied(text);
-    setTimeout(() => setCopied(null), 2000);
+    toast(label, "success");
   };
 
   const closeModal = () => {
@@ -193,6 +251,7 @@ export default function WalletsPage() {
     setKeyCopied(false);
     setTransferResult(null);
     setCreateForm({ label: "", type: "TREASURY" });
+    setDerivedAddress(null);
   };
 
   const totalBalance = Object.values(balances).reduce((sum, b) => sum + b.balance, 0);
@@ -213,7 +272,7 @@ export default function WalletsPage() {
             <Plus size={14} /> Create Wallet
           </button>
           <button
-            onClick={() => { setImportForm({ label: "", address: "", type: "AGENT" }); setModal("import"); }}
+            onClick={() => { setImportForm({ label: "", privateKey: "", type: "AGENT" }); setDerivedAddress(null); setModal("import"); }}
             className="flex items-center gap-2 px-4 py-2 bg-white/[0.04] border border-border text-[13px] font-medium text-muted rounded-lg hover:text-foreground hover:border-primary/30 transition-colors"
           >
             <Import size={14} /> Import
@@ -239,7 +298,7 @@ export default function WalletsPage() {
             </div>
             <div>
               <span className="text-[10px] text-muted-dark uppercase tracking-wide">Portfolio Value</span>
-              <p className="text-lg font-bold text-foreground">${totalBalance.toFixed(4)} USDC</p>
+              <p className="text-lg font-bold text-foreground">{totalBalance.toFixed(4)} USDC</p>
             </div>
           </div>
         </motion.div>
@@ -280,8 +339,36 @@ export default function WalletsPage() {
                     <Bot size={18} className="text-success" />
                   )}
                 </div>
-                <div className="flex-1">
-                  <h4 className="text-[14px] font-semibold text-foreground">{wallet.label}</h4>
+                <div className="flex-1 min-w-0">
+                  {editingLabel === wallet.id ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={editLabelValue}
+                        onChange={(e) => setEditLabelValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleRename(wallet.id); if (e.key === "Escape") setEditingLabel(null); }}
+                        autoFocus
+                        className="bg-white/[0.03] border border-primary/50 rounded px-2 py-0.5 text-[14px] text-foreground w-full focus:outline-none"
+                      />
+                      <button
+                        onClick={() => handleRename(wallet.id)}
+                        disabled={renaming}
+                        className="text-success hover:text-success/80 p-1"
+                      >
+                        <CheckCircle2 size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-[14px] font-semibold text-foreground truncate">{wallet.label}</h4>
+                      <button
+                        onClick={() => { setEditingLabel(wallet.id); setEditLabelValue(wallet.label); }}
+                        className="text-muted-dark hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    </div>
+                  )}
                   <span className={cn(
                     "text-[10px] font-semibold uppercase tracking-wider",
                     wallet.type === "TREASURY" ? "text-primary-light" : "text-success"
@@ -294,7 +381,7 @@ export default function WalletsPage() {
                     <Loader2 size={14} className="text-muted-dark animate-spin" />
                   ) : (
                     <span className="text-sm font-bold text-foreground">
-                      ${(balances[wallet.id]?.balance || 0).toFixed(4)}
+                      {(balances[wallet.id]?.balance || 0).toFixed(4)}
                     </span>
                   )}
                   <span className="text-[9px] text-muted-dark block">USDC</span>
@@ -304,11 +391,8 @@ export default function WalletsPage() {
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-[11px] font-mono text-muted-dark flex-1 truncate">{wallet.address}</span>
                 <button
-                  onClick={() => copyText(wallet.address)}
-                  className={cn(
-                    "p-1.5 rounded-md transition-colors",
-                    copied === wallet.address ? "text-success bg-success/10" : "text-muted-dark hover:text-foreground hover:bg-white/[0.04]"
-                  )}
+                  onClick={() => copyText(wallet.address, "Wallet address copied")}
+                  className="p-1.5 rounded-md text-muted-dark hover:text-foreground hover:bg-white/[0.04] transition-colors"
                 >
                   <Copy size={12} />
                 </button>
@@ -341,6 +425,18 @@ export default function WalletsPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-muted-dark hover:text-foreground hover:bg-white/[0.04] rounded-lg transition-colors"
                 >
                   <History size={12} /> History
+                </button>
+                <button
+                  onClick={() => fetchBalance(wallet.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-muted-dark hover:text-primary-light hover:bg-primary/5 rounded-lg transition-colors ml-auto"
+                >
+                  <RefreshCw size={12} />
+                </button>
+                <button
+                  onClick={() => { setSelectedWallet(wallet); setModal("delete"); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-muted-dark hover:text-danger hover:bg-danger/5 rounded-lg transition-colors"
+                >
+                  <Trash2 size={12} />
                 </button>
               </div>
 
@@ -487,17 +583,35 @@ export default function WalletsPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Wallet Address</label>
+                      <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Private Key</label>
                       <input
-                        type="text"
-                        value={importForm.address}
-                        onChange={(e) => setImportForm({ ...importForm, address: e.target.value })}
+                        type="password"
+                        value={importForm.privateKey}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setImportForm({ ...importForm, privateKey: val });
+                          const normalized = val.startsWith("0x") ? val : `0x${val}`;
+                          if (/^0x[a-fA-F0-9]{64}$/.test(normalized)) {
+                            setDerivedAddress(null);
+                            import("ethers").then(({ Wallet: EthWallet }) => {
+                              try { setDerivedAddress(new EthWallet(normalized).address); } catch {}
+                            });
+                          } else {
+                            setDerivedAddress(null);
+                          }
+                        }}
                         required
-                        pattern="^0x[a-fA-F0-9]{40}$"
                         className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground font-mono placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
-                        placeholder="0x..."
+                        placeholder="Enter 64-char hex private key"
                       />
+                      <p className="text-[10px] text-muted-dark mt-1">Your key is encrypted with AES-256-GCM before storage</p>
                     </div>
+                    {derivedAddress && (
+                      <div className="p-3 rounded-xl bg-success/5 border border-success/20">
+                        <span className="text-[10px] text-success block mb-1 font-medium">Derived Address</span>
+                        <code className="text-[11px] font-mono text-foreground break-all">{derivedAddress}</code>
+                      </div>
+                    )}
                     <div>
                       <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Type</label>
                       <select
@@ -509,9 +623,16 @@ export default function WalletsPage() {
                         <option value="TREASURY">Treasury</option>
                       </select>
                     </div>
+                    <div className="p-3 rounded-xl bg-warning/5 border border-warning/20">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Shield size={12} className="text-warning" />
+                        <span className="text-[11px] font-semibold text-warning">Security</span>
+                      </div>
+                      <p className="text-[10px] text-muted-dark">Private keys are encrypted using AES-256-GCM and never stored in plaintext.</p>
+                    </div>
                     <button
                       type="submit"
-                      disabled={importing}
+                      disabled={importing || !derivedAddress}
                       className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white text-[13px] font-medium rounded-lg hover:bg-primary/80 transition-colors disabled:opacity-50"
                     >
                       {importing ? <Loader2 size={14} className="animate-spin" /> : <><Import size={14} /> Import Wallet</>}
@@ -533,13 +654,10 @@ export default function WalletsPage() {
                       <div className="flex items-center gap-2">
                         <code className="flex-1 text-[12px] font-mono text-foreground break-all select-all">{selectedWallet.address}</code>
                         <button
-                          onClick={() => copyText(selectedWallet.address)}
-                          className={cn(
-                            "p-2 rounded-lg shrink-0 transition-colors",
-                            copied === selectedWallet.address ? "text-success bg-success/10" : "text-muted-dark hover:text-foreground hover:bg-white/[0.04]"
-                          )}
+                          onClick={() => copyText(selectedWallet.address, "Deposit address copied")}
+                          className="p-2 rounded-lg shrink-0 text-muted-dark hover:text-foreground hover:bg-white/[0.04] transition-colors"
                         >
-                          {copied === selectedWallet.address ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                          <Copy size={14} />
                         </button>
                       </div>
                     </div>
@@ -610,7 +728,7 @@ export default function WalletsPage() {
                           {selectedWallet.type === "TREASURY" ? <Shield size={14} className="text-primary-light" /> : <Bot size={14} className="text-success" />}
                           <span className="text-[13px] font-medium text-foreground">{selectedWallet.label}</span>
                           <span className="text-[11px] text-muted-dark ml-auto">
-                            ${(balances[selectedWallet.id]?.balance || 0).toFixed(4)} USDC
+                            {(balances[selectedWallet.id]?.balance || 0).toFixed(4)} USDC
                           </span>
                         </div>
                       </div>
@@ -626,7 +744,7 @@ export default function WalletsPage() {
                           <option value="">Select destination wallet</option>
                           {wallets.filter(w => w.id !== selectedWallet.id).map(w => (
                             <option key={w.id} value={w.id}>
-                              {w.label} ({w.type}) — ${(balances[w.id]?.balance || 0).toFixed(4)} USDC
+                              {w.label} ({w.type}) — {(balances[w.id]?.balance || 0).toFixed(4)} USDC
                             </option>
                           ))}
                         </select>
@@ -711,7 +829,7 @@ export default function WalletsPage() {
                                 "text-[13px] font-semibold font-mono",
                                 isOutgoing ? "text-danger" : "text-success"
                               )}>
-                                {isOutgoing ? "-" : "+"}${tx.amount.toFixed(4)}
+                                {isOutgoing ? "-" : "+"}{tx.amount.toFixed(4)} USDC
                               </span>
                             </div>
                             {tx.reference && (
@@ -745,6 +863,43 @@ export default function WalletsPage() {
                       })}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Delete Wallet Modal */}
+              {modal === "delete" && selectedWallet && (
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-lg font-semibold text-foreground">Delete Wallet</h3>
+                    <button onClick={closeModal} className="text-muted-dark hover:text-foreground"><X size={18} /></button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-danger/5 border border-danger/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle size={16} className="text-danger" />
+                        <span className="text-[13px] font-semibold text-danger">This action cannot be undone</span>
+                      </div>
+                      <p className="text-[12px] text-muted-dark">
+                        Are you sure you want to delete <strong className="text-foreground">{selectedWallet.label}</strong>?
+                        The wallet address <code className="text-[10px]">{selectedWallet.address.slice(0, 10)}...{selectedWallet.address.slice(-6)}</code> will be soft-deleted.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={closeModal}
+                        className="flex-1 py-2.5 bg-white/[0.04] border border-border text-[13px] font-medium text-foreground rounded-lg hover:bg-white/[0.06] transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-danger text-white text-[13px] font-medium rounded-lg hover:bg-danger/80 transition-colors disabled:opacity-50"
+                      >
+                        {deleting ? <Loader2 size={14} className="animate-spin" /> : <><Trash2 size={14} /> Delete</>}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </motion.div>

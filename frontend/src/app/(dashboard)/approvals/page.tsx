@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatUsdc } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toast";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { CheckCircle2, XCircle, Bot, ThumbsUp, ThumbsDown, Eye, Wifi, WifiOff, Loader2 } from "lucide-react";
@@ -122,7 +122,7 @@ export default function ApprovalsPage() {
                   </div>
                   <p className="text-[13px] text-muted">{apr.reason}</p>
                 </div>
-                <span className="text-xl font-bold font-mono text-foreground">{formatCurrency(apr.amount)}</span>
+                <span className="text-xl font-bold font-mono text-foreground">{formatUsdc(apr.amount, 2)}</span>
               </div>
 
               <div className="flex items-center gap-6 mb-4">
@@ -190,7 +190,7 @@ export default function ApprovalsPage() {
                     <span className="text-[13px] font-medium text-foreground">{apr.vendor}</span>
                     <span className="text-[12px] text-muted">{apr.reason}</span>
                   </div>
-                  <span className="text-[13px] font-mono font-semibold text-foreground">{formatCurrency(apr.amount)}</span>
+                  <span className="text-[13px] font-mono font-semibold text-foreground">{formatUsdc(apr.amount, 2)}</span>
                 </div>
               </div>
             ))}

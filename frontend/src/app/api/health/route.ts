@@ -440,6 +440,84 @@ ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "txHash" TEXT;
 ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "fromWalletId" TEXT;
 ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "toWalletId" TEXT;
 ALTER TABLE "ApiService" RENAME COLUMN "monthlyBudget" TO "dailyBudget";
+ALTER TABLE "Wallet" ADD COLUMN IF NOT EXISTS "encryptedPrivateKey" TEXT;
+ALTER TABLE "Wallet" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE "Wallet" ADD COLUMN IF NOT EXISTS "isDefault" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Wallet" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3);
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "priority" TEXT NOT NULL DEFAULT 'normal';
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "progress" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "retryCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "correlationId" TEXT;
+CREATE TABLE IF NOT EXISTS "ExecutionLog" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "taskId" TEXT,
+    "agentId" TEXT,
+    "severity" TEXT NOT NULL DEFAULT 'info',
+    "component" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "detail" TEXT NOT NULL,
+    "correlationId" TEXT,
+    "metadata" JSONB NOT NULL DEFAULT '{}',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ExecutionLog_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "ExecutionLog_orgId_createdAt_idx" ON "ExecutionLog"("orgId", "createdAt");
+CREATE INDEX IF NOT EXISTS "ExecutionLog_taskId_idx" ON "ExecutionLog"("taskId");
+CREATE INDEX IF NOT EXISTS "ExecutionLog_correlationId_idx" ON "ExecutionLog"("correlationId");
+CREATE INDEX IF NOT EXISTS "Task_correlationId_idx" ON "Task"("correlationId");
+ALTER TABLE "ExecutionLog" DROP CONSTRAINT IF EXISTS "ExecutionLog_orgId_fkey";
+ALTER TABLE "ExecutionLog" ADD CONSTRAINT "ExecutionLog_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
+ALTER TABLE "ExecutionLog" DROP CONSTRAINT IF EXISTS "ExecutionLog_taskId_fkey";
+ALTER TABLE "ExecutionLog" ADD CONSTRAINT "ExecutionLog_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE SET NULL;
+ALTER TABLE "Agent" ADD COLUMN IF NOT EXISTS "description" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Agent" ADD COLUMN IF NOT EXISTS "version" TEXT NOT NULL DEFAULT '1.0.0';
+ALTER TABLE "Agent" ADD COLUMN IF NOT EXISTS "healthScore" DOUBLE PRECISION NOT NULL DEFAULT 100;
+ALTER TABLE "Agent" ADD COLUMN IF NOT EXISTS "memory" JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE "Agent" ADD COLUMN IF NOT EXISTS "lastActivityAt" TIMESTAMP(3);
+ALTER TABLE "Agent" ADD COLUMN IF NOT EXISTS "lastError" TEXT;
+CREATE TABLE IF NOT EXISTS "AgentMetric" (
+    "id" TEXT NOT NULL,
+    "agentId" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "successCount" INTEGER NOT NULL DEFAULT 0,
+    "failureCount" INTEGER NOT NULL DEFAULT 0,
+    "totalDuration" INTEGER NOT NULL DEFAULT 0,
+    "taskCount" INTEGER NOT NULL DEFAULT 0,
+    "retryCount" INTEGER NOT NULL DEFAULT 0,
+    "period" TEXT NOT NULL,
+    "periodStart" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AgentMetric_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "AgentMetric_agentId_periodStart_idx" ON "AgentMetric"("agentId", "periodStart");
+CREATE UNIQUE INDEX IF NOT EXISTS "AgentMetric_agentId_period_periodStart_key" ON "AgentMetric"("agentId", "period", "periodStart");
+ALTER TABLE "AgentMetric" DROP CONSTRAINT IF EXISTS "AgentMetric_agentId_fkey";
+ALTER TABLE "AgentMetric" ADD CONSTRAINT "AgentMetric_agentId_fkey" FOREIGN KEY ("agentId") REFERENCES "Agent"("id") ON DELETE CASCADE;
+CREATE TABLE IF NOT EXISTS "KpiSnapshot" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "period" TEXT NOT NULL,
+    "periodStart" TIMESTAMP(3) NOT NULL,
+    "totalPayments" INTEGER NOT NULL DEFAULT 0,
+    "totalVolume" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "avgTransactionSize" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "budgetEfficiency" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "costPerTask" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "taskSuccessRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "totalAgentExecutions" INTEGER NOT NULL DEFAULT 0,
+    "estimatedSavings" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "activeAgents" INTEGER NOT NULL DEFAULT 0,
+    "avgExecutionTime" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "totalApiCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "totalApiCalls" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "KpiSnapshot_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "KpiSnapshot_orgId_period_periodStart_key" ON "KpiSnapshot"("orgId", "period", "periodStart");
+CREATE INDEX IF NOT EXISTS "KpiSnapshot_orgId_periodStart_idx" ON "KpiSnapshot"("orgId", "periodStart");
+ALTER TABLE "KpiSnapshot" DROP CONSTRAINT IF EXISTS "KpiSnapshot_orgId_fkey";
+ALTER TABLE "KpiSnapshot" ADD CONSTRAINT "KpiSnapshot_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
 `;
 
 export async function POST() {

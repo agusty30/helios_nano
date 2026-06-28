@@ -40,7 +40,7 @@ export default function SpendingChart({ data }: { data: SpendingData[] }) {
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
             <XAxis dataKey="month" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k USDC` : `${v.toFixed(1)} USDC`} />
             <Tooltip
               contentStyle={{
                 background: "#151B2E",
@@ -49,7 +49,7 @@ export default function SpendingChart({ data }: { data: SpendingData[] }) {
                 fontSize: 12,
               }}
               labelStyle={{ color: "#94A3B8" }}
-              formatter={(value: number) => [`$${value.toLocaleString()}`, undefined]}
+              formatter={(value: number) => [`${value.toFixed(4)} USDC`, undefined]}
             />
             <Area type="monotone" dataKey="budget" stroke="#475569" strokeWidth={1.5} strokeDasharray="4 4" fill="none" />
             <Area type="monotone" dataKey="actual" stroke="#4F46E5" strokeWidth={2} fill="url(#gActual)" />

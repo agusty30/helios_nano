@@ -2,14 +2,16 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
-import type { CanvasMetrics, AgentRouteResponse } from "@/lib/types";
+import { useToast } from "@/components/ui/Toast";
+import type { CanvasMetrics, AgentRouteResponse, ExecutionLogRecord } from "@/lib/types";
 import {
-  Send, Sparkles, CheckCircle2, Clock, Loader2, Bot, XCircle,
+  Send, Sparkles, CheckCircle2, Clock, Loader2, Bot, XCircle, XOctagon,
   CreditCard, ShoppingCart, Landmark, Wallet, Wifi, WifiOff,
   Play, ListChecks, ChevronDown, ChevronUp, Terminal,
+  AlertTriangle, Info, AlertCircle, Database, Globe,
 } from "lucide-react";
 
 const agentIcon: Record<string, React.FC<{ size?: number; className?: string }>> = {
@@ -17,12 +19,10 @@ const agentIcon: Record<string, React.FC<{ size?: number; className?: string }>>
   "Procurement Agent": ShoppingCart,
   "Treasury Agent": Landmark,
   "Budget Agent": Wallet,
-};
-
-const statusIcon: Record<string, React.FC<{ size?: number; className?: string }>> = {
-  completed: CheckCircle2,
-  in_progress: Loader2,
-  pending: Clock,
+  "API Cost Agent": Globe,
+  "Reporting Agent": ListChecks,
+  "Optimization Agent": Sparkles,
+  "Notification Agent": AlertCircle,
 };
 
 const MOCK_CANVAS: CanvasMetrics = {
@@ -36,14 +36,6 @@ const commandSuggestions = [
   "Pay all approved invoices",
   "Optimize marketing budget for Q3",
   "Find and cancel duplicate subscriptions",
-];
-
-const timelineEvents = [
-  { time: "08:00", agent: "Budget Agent", action: "Anomaly Detected", detail: "AWS cost spike: EC2 instances running 3x normal capacity", status: "completed" as const },
-  { time: "08:03", agent: "Procurement Agent", action: "Negotiation Started", detail: "Initiated reserved instance pricing negotiation with AWS", status: "completed" as const, savings: 450 },
-  { time: "08:07", agent: "Treasury Agent", action: "Funds Allocated", detail: "Reserved $13,500 from operating budget for annual commitment", status: "completed" as const },
-  { time: "08:10", agent: "Payment Agent", action: "Payment Executed", detail: "Executed payment via Circle Gateway — gas-free settlement", status: "completed" as const, savings: 450 },
-  { time: "08:15", agent: "Budget Agent", action: "Monitoring", detail: "Continuous cost monitoring re-engaged for all cloud providers", status: "in_progress" as const },
 ];
 
 interface DbAgent {
@@ -66,11 +58,36 @@ interface TaskRecord {
   command: string;
   commandType: string;
   status: string;
+  priority: string;
+  progress: number;
+  retryCount: number;
+  correlationId: string | null;
+  agentName: string;
   steps: TaskStep[];
   result: Record<string, unknown> | null;
   executionTimeMs: number | null;
   createdAt: string;
+  completedAt: string | null;
 }
+
+const statusConfig: Record<string, { icon: React.FC<{ size?: number; className?: string }>; color: string; bg: string; label: string }> = {
+  PENDING:   { icon: Clock,        color: "text-muted-dark",    bg: "bg-white/5",      label: "Queued" },
+  RUNNING:   { icon: Loader2,      color: "text-primary-light", bg: "bg-primary/10",   label: "Running" },
+  COMPLETED: { icon: CheckCircle2, color: "text-success",       bg: "bg-success/10",   label: "Success" },
+  FAILED:    { icon: XCircle,      color: "text-danger",        bg: "bg-danger/10",    label: "Failed" },
+  CANCELLED: { icon: XOctagon,     color: "text-warning",       bg: "bg-warning/10",   label: "Cancelled" },
+};
+
+const severityIcon: Record<string, React.FC<{ size?: number; className?: string }>> = {
+  info: Info,
+  warn: AlertTriangle,
+  error: XCircle,
+};
+const severityColor: Record<string, string> = {
+  info: "text-primary-light",
+  warn: "text-warning",
+  error: "text-danger",
+};
 
 export default function MissionControlPage() {
   const [command, setCommand] = useState("");
@@ -78,8 +95,10 @@ export default function MissionControlPage() {
   const [responses, setResponses] = useState<AgentRouteResponse[]>([]);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [taskLogs, setTaskLogs] = useState<Record<string, ExecutionLogRecord[]>>({});
   const [mode, setMode] = useState<"agent" | "task">("task");
   const [dbAgents, setDbAgents] = useState<DbAgent[]>([]);
+  const { toast } = useToast();
 
   const fetchMetrics = useCallback(() => api.fetchCanvasMetrics(), []);
   const metrics = useApi(fetchMetrics, MOCK_CANVAS, 10000);
@@ -100,6 +119,14 @@ export default function MissionControlPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const loadTaskLogs = async (taskId: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/logs`);
+      const data = await res.json();
+      setTaskLogs((prev) => ({ ...prev, [taskId]: data.logs || [] }));
+    } catch {}
+  };
+
   const handleSubmit = async () => {
     if (!command.trim() || sending) return;
     setSending(true);
@@ -115,12 +142,16 @@ export default function MissionControlPage() {
         if (data.task) {
           setTasks((prev) => [data.task, ...prev]);
           setExpandedTask(data.task.id);
+          toast("Task executed", "success");
         }
-      } catch {}
+      } catch {
+        toast("Task execution failed", "error");
+      }
     } else {
       const result = await api.postAgentRoute(command, "low");
       if (result) {
         setResponses((prev) => [result, ...prev]);
+        toast("Agent response received", "success");
       }
     }
 
@@ -128,21 +159,12 @@ export default function MissionControlPage() {
     setCommand("");
   };
 
-  const taskStatusColor = (status: string) => {
-    switch (status) {
-      case "COMPLETED": return "text-success";
-      case "FAILED": return "text-danger";
-      case "RUNNING": return "text-primary-light";
-      default: return "text-muted-dark";
-    }
-  };
-
-  const taskStatusIcon = (status: string) => {
-    switch (status) {
-      case "COMPLETED": return CheckCircle2;
-      case "FAILED": return XCircle;
-      case "RUNNING": return Loader2;
-      default: return Clock;
+  const toggleExpand = (taskId: string) => {
+    if (expandedTask === taskId) {
+      setExpandedTask(null);
+    } else {
+      setExpandedTask(taskId);
+      if (!taskLogs[taskId]) loadTaskLogs(taskId);
     }
   };
 
@@ -223,141 +245,159 @@ export default function MissionControlPage() {
         </div>
       </motion.div>
 
-      {/* Task history */}
-      {tasks.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-bright rounded-xl p-6"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <ListChecks size={16} className="text-primary-light" />
-            <h3 className="text-sm font-semibold text-foreground">Task History</h3>
-            <span className="text-[10px] text-muted-dark ml-auto">{tasks.length} tasks</span>
-          </div>
-          <div className="space-y-2">
-            {tasks.map((task) => {
-              const Icon = taskStatusIcon(task.status);
-              const isExpanded = expandedTask === task.id;
-              return (
-                <div key={task.id} className="rounded-lg bg-white/[0.02] border border-border overflow-hidden">
-                  <button
-                    onClick={() => setExpandedTask(isExpanded ? null : task.id)}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
-                  >
-                    <Icon size={14} className={cn(taskStatusColor(task.status), task.status === "RUNNING" && "animate-spin")} />
-                    <span className="text-[12px] font-medium text-foreground flex-1 truncate">{task.command}</span>
-                    <span className="text-[10px] text-muted-dark font-mono">{task.commandType}</span>
-                    {task.executionTimeMs !== null && (
-                      <span className="text-[10px] text-muted-dark">{task.executionTimeMs}ms</span>
-                    )}
-                    {isExpanded ? <ChevronUp size={12} className="text-muted-dark" /> : <ChevronDown size={12} className="text-muted-dark" />}
-                  </button>
-                  {isExpanded && (
-                    <div className="px-4 pb-3 border-t border-border/50">
-                      <div className="mt-3 space-y-1.5">
-                        {(task.steps as TaskStep[]).map((step) => (
-                          <div key={step.step} className="flex items-start gap-2">
-                            <div className={cn("mt-0.5 w-1.5 h-1.5 rounded-full shrink-0",
-                              step.status === "completed" ? "bg-success" : step.status === "failed" ? "bg-danger" : "bg-primary-light")} />
-                            <span className="text-[11px] text-muted">{step.detail}</span>
-                          </div>
-                        ))}
-                      </div>
-                      {task.result && (
-                        <div className="mt-3 p-2 rounded-md bg-bg text-[10px] font-mono text-muted-dark">
-                          {JSON.stringify(task.result, null, 2)}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Live LLM responses */}
-      {responses.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-bright rounded-xl p-6"
-        >
-          <h3 className="text-sm font-semibold text-foreground mb-4">Agent Responses</h3>
-          <div className="space-y-3">
-            {responses.map((r, i) => (
-              <div key={i} className="p-4 rounded-lg bg-white/[0.02] border border-border">
-                <div className="flex items-center gap-3 mb-2">
-                  <Bot size={14} className="text-primary-light" />
-                  <span className="text-[12px] font-semibold text-foreground">{r.model_used}</span>
-                  <span className="text-[10px] text-muted-dark font-mono">{r.route} · ${r.cost.toFixed(4)}</span>
-                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-success/10 text-success font-semibold uppercase">{r.settlement}</span>
-                </div>
-                <p className="text-[13px] text-muted leading-relaxed">{r.response}</p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
+      {/* Execution Timeline — real task data */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Timeline */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-4">
+          {/* Task history / timeline */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
             className="glass-bright rounded-xl p-6"
           >
-            <h3 className="text-sm font-semibold text-foreground mb-5">Agent Execution Timeline</h3>
-            <div className="space-y-0">
-              {timelineEvents.map((event, i) => {
-                const StatusIcon = statusIcon[event.status] || Clock;
-                const AgentIcon = agentIcon[event.agent] || Bot;
-                return (
-                  <div key={i} className="flex gap-4 relative">
-                    {i < timelineEvents.length - 1 && (
-                      <div className="absolute left-[19px] top-10 w-px h-[calc(100%-16px)] bg-border" />
-                    )}
-                    <div className="shrink-0 mt-1">
-                      <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center",
-                        event.status === "completed" ? "bg-success/10" : event.status === "in_progress" ? "bg-primary/10" : "bg-white/5"
-                      )}>
-                        <AgentIcon size={16} className={cn(
-                          event.status === "completed" ? "text-success" : event.status === "in_progress" ? "text-primary-light" : "text-muted-dark"
-                        )} />
-                      </div>
-                    </div>
-                    <div className="flex-1 pb-6">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[13px] font-medium text-foreground">{event.action}</span>
-                        <StatusIcon size={12} className={cn(
-                          event.status === "completed" ? "text-success" : event.status === "in_progress" ? "text-primary-light animate-spin" : "text-muted-dark"
-                        )} />
-                        {event.savings && (
-                          <span className="text-[10px] font-semibold text-success bg-success/10 px-2 py-0.5 rounded-full">
-                            -${event.savings}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[12px] text-muted">{event.detail}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] text-muted-dark font-mono">{event.time}</span>
-                        <span className="text-[10px] text-muted-dark">·</span>
-                        <span className="text-[10px] text-muted-dark">{event.agent}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="flex items-center gap-2 mb-4">
+              <ListChecks size={16} className="text-primary-light" />
+              <h3 className="text-sm font-semibold text-foreground">Execution Timeline</h3>
+              <span className="text-[10px] text-muted-dark ml-auto">{tasks.length} executions</span>
             </div>
+
+            {tasks.length === 0 ? (
+              <div className="text-center py-12">
+                <Terminal size={24} className="text-muted-dark mx-auto mb-2" />
+                <p className="text-[13px] text-muted-dark">No tasks executed yet. Run a command above to get started.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {tasks.map((task) => {
+                  const config = statusConfig[task.status] || statusConfig.PENDING;
+                  const StatusIcon = config.icon;
+                  const isExpanded = expandedTask === task.id;
+                  const AgentIcon = agentIcon[task.agentName] || Bot;
+                  const logs = taskLogs[task.id] || [];
+
+                  return (
+                    <div key={task.id} className="rounded-lg bg-white/[0.02] border border-border overflow-hidden">
+                      <button
+                        onClick={() => toggleExpand(task.id)}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
+                      >
+                        <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", config.bg)}>
+                          <AgentIcon size={14} className={config.color} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[12px] font-medium text-foreground block truncate">{task.command}</span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={cn("text-[9px] font-semibold uppercase", config.color)}>{config.label}</span>
+                            <span className="text-[9px] text-muted-dark font-mono">{task.commandType}</span>
+                            {task.priority !== "normal" && (
+                              <span className="text-[9px] text-warning font-semibold uppercase">{task.priority}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {task.executionTimeMs !== null && (
+                            <span className="text-[10px] text-muted-dark font-mono">{task.executionTimeMs}ms</span>
+                          )}
+                          <StatusIcon size={14} className={cn(config.color, task.status === "RUNNING" && "animate-spin")} />
+                          <span className="text-[10px] text-muted-dark">{timeAgo(new Date(task.createdAt))}</span>
+                          {isExpanded ? <ChevronUp size={12} className="text-muted-dark" /> : <ChevronDown size={12} className="text-muted-dark" />}
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-4 pb-4 border-t border-border/50">
+                          {/* Progress bar */}
+                          {task.status === "RUNNING" && (
+                            <div className="mt-3 mb-2">
+                              <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${task.progress}%` }} />
+                              </div>
+                              <span className="text-[9px] text-muted-dark mt-0.5 block">{task.progress}% complete</span>
+                            </div>
+                          )}
+
+                          {/* Metadata row */}
+                          <div className="flex items-center gap-4 mt-3 text-[10px] text-muted-dark">
+                            <span>Agent: <strong className="text-foreground">{task.agentName}</strong></span>
+                            {task.correlationId && <span className="font-mono">CID: {task.correlationId.slice(0, 10)}...</span>}
+                            {task.retryCount > 0 && <span className="text-warning">Retries: {task.retryCount}</span>}
+                            {task.completedAt && <span>Completed: {new Date(task.completedAt).toLocaleTimeString()}</span>}
+                          </div>
+
+                          {/* Steps */}
+                          <div className="mt-3 space-y-1.5">
+                            {(task.steps as TaskStep[]).map((step) => (
+                              <div key={step.step} className="flex items-start gap-2">
+                                <div className={cn("mt-0.5 w-1.5 h-1.5 rounded-full shrink-0",
+                                  step.status === "completed" ? "bg-success" : step.status === "failed" ? "bg-danger" : "bg-primary-light")} />
+                                <span className="text-[11px] text-muted">{step.detail}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Execution logs */}
+                          {logs.length > 0 && (
+                            <div className="mt-3 border-t border-border/30 pt-3">
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <Database size={11} className="text-muted-dark" />
+                                <span className="text-[10px] font-semibold text-muted-dark uppercase">Execution Logs</span>
+                              </div>
+                              <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                                {logs.map((log) => {
+                                  const SevIcon = severityIcon[log.severity] || Info;
+                                  return (
+                                    <div key={log.id} className="flex items-start gap-2 text-[10px]">
+                                      <SevIcon size={10} className={cn("mt-0.5 shrink-0", severityColor[log.severity] || "text-muted-dark")} />
+                                      <span className="text-muted-dark font-mono shrink-0">{new Date(log.createdAt).toLocaleTimeString()}</span>
+                                      <span className="text-muted-dark shrink-0">[{log.component}]</span>
+                                      <span className="text-muted truncate">{log.detail}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Result */}
+                          {task.result && (
+                            <div className="mt-3 p-2 rounded-md bg-bg text-[10px] font-mono text-muted-dark max-h-[150px] overflow-y-auto">
+                              <pre className="whitespace-pre-wrap">{JSON.stringify(task.result, null, 2)}</pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </motion.div>
+
+          {/* Live LLM responses */}
+          {responses.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-bright rounded-xl p-6"
+            >
+              <h3 className="text-sm font-semibold text-foreground mb-4">Agent Responses</h3>
+              <div className="space-y-3">
+                {responses.map((r, i) => (
+                  <div key={i} className="p-4 rounded-lg bg-white/[0.02] border border-border">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Bot size={14} className="text-primary-light" />
+                      <span className="text-[12px] font-semibold text-foreground">{r.model_used}</span>
+                      <span className="text-[10px] text-muted-dark font-mono">{r.route} · {r.cost.toFixed(4)} USDC</span>
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-success/10 text-success font-semibold uppercase">{r.settlement}</span>
+                    </div>
+                    <p className="text-[13px] text-muted leading-relaxed">{r.response}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
         </div>
 
-        {/* Active agents */}
+        {/* Active agents sidebar */}
         <div>
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -371,8 +411,8 @@ export default function MissionControlPage() {
                 <div className="grid grid-cols-2 gap-3 text-[10px]">
                   <div><span className="text-muted-dark">Throughput</span><br/><span className="text-foreground font-semibold">{metrics.data.active_throughput}/s</span></div>
                   <div><span className="text-muted-dark">Last Route</span><br/><span className="text-foreground font-semibold">{metrics.data.last_route}</span></div>
-                  <div><span className="text-muted-dark">Spend Today</span><br/><span className="text-foreground font-semibold">${metrics.data.daily_spend.toFixed(4)}</span></div>
-                  <div><span className="text-muted-dark">Saved</span><br/><span className="text-success font-semibold">${metrics.data.total_saved.toFixed(4)}</span></div>
+                  <div><span className="text-muted-dark">Spend Today</span><br/><span className="text-foreground font-semibold">{metrics.data.daily_spend.toFixed(4)} USDC</span></div>
+                  <div><span className="text-muted-dark">Saved</span><br/><span className="text-success font-semibold">{metrics.data.total_saved.toFixed(4)} USDC</span></div>
                 </div>
               </div>
             )}

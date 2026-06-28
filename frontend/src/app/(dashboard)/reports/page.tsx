@@ -130,7 +130,7 @@ export default function ReportsPage() {
                   </div>
                   {reportData?.summary && (
                     <p className="text-[12px] text-muted mb-3">
-                      {reportData.summary.totalTransactions} transactions | ${(reportData.summary.totalSpend || 0).toFixed(2)} total spend | {reportData.summary.activeAgents} agents
+                      {reportData.summary.totalTransactions} transactions | {(reportData.summary.totalSpend || 0).toFixed(2)} USDC total spend | {reportData.summary.activeAgents} agents
                     </p>
                   )}
                   <div className="flex items-center gap-4 text-[10px] text-muted-dark">

@@ -5,6 +5,7 @@ import type {
   OrganizationRecord, WalletRecord, TaskRecord, AuditLogEntry, PaymentPolicyRecord,
   VendorRecord, ApiServiceRecord, ApiCostsResponse,
   WalletGenerateResponse, WalletTransactionRecord, TransferRequest,
+  ExecutionLogRecord,
 } from "./types";
 
 async function get<T>(url: string): Promise<T | null> {
@@ -45,6 +46,30 @@ async function put<T>(url: string, body: unknown): Promise<T | null> {
   }
 }
 
+async function patch<T>(url: string, body: unknown): Promise<T | null> {
+  try {
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function del<T>(url: string): Promise<T | null> {
+  try {
+    const res = await fetch(url, { method: "DELETE" });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 export const api = {
   // Backend (FastAPI)
   fetchStatus: () => get<ApiStatus>("/api/status"),
@@ -77,13 +102,28 @@ export const api = {
   createTask: (command: string) => post<{ task: TaskRecord }>("/api/tasks", { command }),
   listTasks: (limit = 20) => get<{ tasks: TaskRecord[] }>(`/api/tasks?limit=${limit}`),
   getTask: (id: string) => get<{ task: TaskRecord }>(`/api/tasks/${id}`),
+  getTaskLogs: (id: string) => get<{ logs: ExecutionLogRecord[] }>(`/api/tasks/${id}/logs`),
+
+  // Logs
+  getLogs: (params?: { severity?: string; component?: string; taskId?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.severity) q.set("severity", params.severity);
+    if (params?.component) q.set("component", params.component);
+    if (params?.taskId) q.set("taskId", params.taskId);
+    if (params?.limit) q.set("limit", String(params.limit));
+    return get<{ logs: ExecutionLogRecord[]; total: number }>(`/api/logs?${q}`);
+  },
 
   // Wallets
   listWallets: () => get<{ wallets: WalletRecord[] }>("/api/wallets"),
-  createWallet: (data: { label: string; address: string; type: string }) =>
+  createWallet: (data: { label: string; address?: string; privateKey?: string; type: string }) =>
     post<{ wallet: WalletRecord }>("/api/wallets", data),
   generateWallet: (data: { label: string; type: string }) =>
     post<WalletGenerateResponse>("/api/wallets/generate", data),
+  updateWallet: (id: string, data: { label?: string; status?: string; isDefault?: boolean }) =>
+    patch<{ wallet: WalletRecord }>(`/api/wallets/${id}`, data),
+  deleteWallet: (id: string) =>
+    del<{ success: boolean }>(`/api/wallets/${id}`),
   getWalletBalance: (id: string) =>
     get<{ walletId: string; address: string; balance: number; chain: string }>(`/api/wallets/${id}/balance`),
   transferFunds: (fromWalletId: string, data: TransferRequest) =>

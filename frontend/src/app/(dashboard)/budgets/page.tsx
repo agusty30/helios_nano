@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatUsdc } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { BudgetStateResponse } from "@/lib/types";
@@ -93,20 +93,20 @@ export default function BudgetsPage() {
           className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary/20 via-primary/10 to-transparent border border-primary/20 p-5"
         >
           <div className="grid grid-cols-5 gap-4">
-            <div><span className="text-[10px] text-muted-dark block">Daily Budget</span><span className="text-lg font-bold font-mono text-foreground">${budget.data.dailyUsd.toFixed(2)}</span></div>
-            <div><span className="text-[10px] text-muted-dark block">Spent Today</span><span className="text-lg font-bold font-mono text-foreground">${budget.data.spentToday.toFixed(4)}</span></div>
-            <div><span className="text-[10px] text-muted-dark block">Remaining</span><span className="text-lg font-bold font-mono text-success">${budget.data.remaining.toFixed(4)}</span></div>
+            <div><span className="text-[10px] text-muted-dark block">Daily Budget</span><span className="text-lg font-bold font-mono text-foreground">{budget.data.dailyUsd.toFixed(2)} USDC</span></div>
+            <div><span className="text-[10px] text-muted-dark block">Spent Today</span><span className="text-lg font-bold font-mono text-foreground">{budget.data.spentToday.toFixed(4)} USDC</span></div>
+            <div><span className="text-[10px] text-muted-dark block">Remaining</span><span className="text-lg font-bold font-mono text-success">{budget.data.remaining.toFixed(4)} USDC</span></div>
             <div><span className="text-[10px] text-muted-dark block">Calls Today</span><span className="text-lg font-bold font-mono text-foreground">{budget.data.callsToday}</span></div>
-            <div><span className="text-[10px] text-muted-dark block">Burn Rate</span><span className="text-lg font-bold font-mono text-foreground">${budget.data.burnRatePerHour.toFixed(4)}/hr</span></div>
+            <div><span className="text-[10px] text-muted-dark block">Burn Rate</span><span className="text-lg font-bold font-mono text-foreground">{budget.data.burnRatePerHour.toFixed(4)} USDC/hr</span></div>
           </div>
         </motion.div>
       )}
 
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Total Allocated", value: formatCurrency(totalAllocated), color: "text-primary-light" },
-          { label: "Total Spent", value: formatCurrency(totalSpent), color: "text-foreground" },
-          { label: "Forecasted", value: formatCurrency(totalForecast), color: "text-warning" },
+          { label: "Total Allocated", value: formatUsdc(totalAllocated, 2), color: "text-primary-light" },
+          { label: "Total Spent", value: formatUsdc(totalSpent, 2), color: "text-foreground" },
+          { label: "Forecasted", value: formatUsdc(totalForecast, 2), color: "text-warning" },
         ].map((s, i) => (
           <motion.div
             key={s.label}
@@ -136,8 +136,8 @@ export default function BudgetsPage() {
               <BarChart data={displayBudgets} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
                 <XAxis dataKey="department" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => budget.isLive ? `$${v.toFixed(2)}` : `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={{ background: "#151B2E", border: "1px solid #1E293B", borderRadius: 8, fontSize: 12 }} formatter={(value: number) => [formatCurrency(value), undefined]} />
+                <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => budget.isLive ? `${v.toFixed(2)} USDC` : `${(v / 1000).toFixed(0)}k USDC`} />
+                <Tooltip contentStyle={{ background: "#151B2E", border: "1px solid #1E293B", borderRadius: 8, fontSize: 12 }} formatter={(value: number) => [formatUsdc(value, 4), undefined]} />
                 <Bar dataKey="allocated" fill="#4F46E5" radius={[4, 4, 0, 0]} opacity={0.3} />
                 <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
                   {displayBudgets.map((b, i) => (
@@ -176,9 +176,9 @@ export default function BudgetsPage() {
                 )}
               </div>
               <div className="flex items-center gap-4 mb-3 text-[12px]">
-                <div><span className="text-muted-dark">Spent: </span><span className="font-semibold text-foreground font-mono">{formatCurrency(b.spent)}</span></div>
+                <div><span className="text-muted-dark">Spent: </span><span className="font-semibold text-foreground font-mono">{formatUsdc(b.spent, 4)}</span></div>
                 <span className="text-muted-dark">/</span>
-                <div><span className="text-muted-dark">Budget: </span><span className="font-semibold text-foreground font-mono">{formatCurrency(b.allocated)}</span></div>
+                <div><span className="text-muted-dark">Budget: </span><span className="font-semibold text-foreground font-mono">{formatUsdc(b.allocated, 2)}</span></div>
               </div>
               <div className="w-full bg-white/5 rounded-full h-2 mb-2">
                 <div className={cn("h-2 rounded-full transition-all", pct > 90 ? "bg-danger" : pct > 75 ? "bg-warning" : "bg-success")} style={{ width: `${Math.min(pct, 100)}%` }} />

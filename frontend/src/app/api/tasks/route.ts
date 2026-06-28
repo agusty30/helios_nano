@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, handleAuthError } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { parseCommand } from "@/lib/command-parser";
+import { routeTask, updateAgentActivity } from "@/lib/agent-manager";
+import crypto from "crypto";
+
+function genId() {
+  return `cl${crypto.randomBytes(12).toString("base64url")}`;
+}
+
+async function writeLog(orgId: string, taskId: string, correlationId: string, severity: string, component: string, action: string, detail: string, metadata: Record<string, unknown> = {}) {
+  try {
+    await prisma.executionLog.create({
+      data: { id: genId(), orgId, taskId, severity, component, action, detail, correlationId, metadata: metadata as object },
+    });
+  } catch {}
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,6 +47,8 @@ export async function POST(request: NextRequest) {
 
     const parsed = parseCommand(command);
     const startTime = Date.now();
+    const correlationId = genId();
+    const agentId = await routeTask(user.orgId, parsed.type);
 
     const task = await prisma.task.create({
       data: {
@@ -40,12 +56,16 @@ export async function POST(request: NextRequest) {
         command,
         commandType: parsed.type,
         status: "RUNNING",
+        correlationId,
+        agentId: agentId || undefined,
         steps: JSON.parse(JSON.stringify([
           { step: 1, action: "parse_command", status: "completed", detail: `Parsed as: ${parsed.type}` },
           { step: 2, action: "execute", status: "running", detail: "Processing..." },
         ])),
       },
     });
+
+    await writeLog(user.orgId, task.id, correlationId, "info", "task-engine", "task_started", `Command: ${command}`, { commandType: parsed.type });
 
     let result: Record<string, unknown> = {};
     const steps = [
@@ -210,10 +230,17 @@ export async function POST(request: NextRequest) {
 
       const executionTimeMs = Date.now() - startTime;
 
+      await writeLog(user.orgId, task.id, correlationId, "info", "task-engine", "task_completed", `Completed in ${executionTimeMs}ms`, { result });
+
+      if (agentId) {
+        await updateAgentActivity(agentId, true, executionTimeMs).catch(() => {});
+      }
+
       const updated = await prisma.task.update({
         where: { id: task.id },
         data: {
           status: "COMPLETED",
+          progress: 100,
           steps: JSON.parse(JSON.stringify(steps)),
           result: JSON.parse(JSON.stringify(result)),
           executionTimeMs,
@@ -225,6 +252,12 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       const executionTimeMs = Date.now() - startTime;
       steps.push({ step: steps.length + 1, action: "error", status: "failed", detail: String(err) });
+
+      await writeLog(user.orgId, task.id, correlationId, "error", "task-engine", "task_failed", String(err), { executionTimeMs });
+
+      if (agentId) {
+        await updateAgentActivity(agentId, false, executionTimeMs, String(err)).catch(() => {});
+      }
 
       const updated = await prisma.task.update({
         where: { id: task.id },

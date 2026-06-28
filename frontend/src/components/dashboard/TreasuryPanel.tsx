@@ -66,13 +66,13 @@ export default function TreasuryPanel() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-3 rounded-lg bg-white/[0.02] border border-border">
           <span className="text-[10px] text-muted-dark block mb-1">USDC Balance</span>
-          <span className="text-lg font-bold text-foreground">${m.usdc_balance.toFixed(2)}</span>
+          <span className="text-lg font-bold text-foreground">{m.usdc_balance.toFixed(2)} USDC</span>
         </div>
 
         <div className="p-3 rounded-lg bg-white/[0.02] border border-border">
           <span className="text-[10px] text-muted-dark block mb-1">Today&apos;s Spend</span>
           <div className="flex items-center gap-1">
-            <span className="text-lg font-bold text-foreground">${m.daily_spend.toFixed(2)}</span>
+            <span className="text-lg font-bold text-foreground">{m.daily_spend.toFixed(2)} USDC</span>
             <TrendingDown size={12} className="text-danger" />
           </div>
         </div>
@@ -80,14 +80,14 @@ export default function TreasuryPanel() {
         <div className="p-3 rounded-lg bg-white/[0.02] border border-border">
           <span className="text-[10px] text-muted-dark block mb-1">Total Saved</span>
           <div className="flex items-center gap-1">
-            <span className="text-lg font-bold text-success">${m.total_saved.toFixed(2)}</span>
+            <span className="text-lg font-bold text-success">{m.total_saved.toFixed(2)} USDC</span>
             <TrendingUp size={12} className="text-success" />
           </div>
         </div>
 
         <div className="p-3 rounded-lg bg-white/[0.02] border border-border">
           <span className="text-[10px] text-muted-dark block mb-1">Budget Remaining</span>
-          <span className="text-lg font-bold text-foreground">${m.budget_remaining.toFixed(2)}</span>
+          <span className="text-lg font-bold text-foreground">{m.budget_remaining.toFixed(2)} USDC</span>
           <div className="mt-1.5 h-1 rounded-full bg-white/5 overflow-hidden">
             <div
               className={cn("h-full rounded-full transition-all", budgetProgress > 80 ? "bg-danger" : budgetProgress > 50 ? "bg-warning" : "bg-success")}

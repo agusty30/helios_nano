@@ -6,9 +6,9 @@ import { Zap, CreditCard, Target, Cpu } from "lucide-react";
 
 const metrics = [
   { key: "totalAutonomousPayments" as const, label: "Total Autonomous Payments", icon: CreditCard, fmt: (v: number) => v.toLocaleString() },
-  { key: "avgTransactionSize" as const, label: "Avg Transaction Size", icon: Zap, fmt: (v: number) => `$${v.toFixed(4)}` },
+  { key: "avgTransactionSize" as const, label: "Avg Transaction Size", icon: Zap, fmt: (v: number) => `${v.toFixed(4)} USDC` },
   { key: "budgetUtilizationEfficiency" as const, label: "Budget Utilization", icon: Target, fmt: (v: number) => `${v}%` },
-  { key: "costPerTaskCompleted" as const, label: "Cost / Task", icon: Cpu, fmt: (v: number) => `$${v.toFixed(4)}` },
+  { key: "costPerTaskCompleted" as const, label: "Cost / Task", icon: Cpu, fmt: (v: number) => `${v.toFixed(4)} USDC` },
 ];
 
 export default function TractionBanner({ data }: { data: TractionMetrics }) {

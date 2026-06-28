@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import type { CostBreakdown } from "@/lib/types";
-import { formatCurrency } from "@/lib/utils";
+import { formatUsdc } from "@/lib/utils";
 
 export default function CostBreakdownChart({ data }: { data: CostBreakdown[] }) {
   return (
@@ -41,7 +41,7 @@ export default function CostBreakdownChart({ data }: { data: CostBreakdown[] }) 
                   borderRadius: 8,
                   fontSize: 12,
                 }}
-                formatter={(value: number) => [formatCurrency(value), undefined]}
+                formatter={(value: number) => [formatUsdc(value, 4), undefined]}
               />
             </PieChart>
           </ResponsiveContainer>

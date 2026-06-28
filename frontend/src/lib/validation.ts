@@ -38,6 +38,18 @@ export const walletCreateSchema = z.object({
   type: z.enum(["TREASURY", "AGENT"]),
 });
 
+export const walletImportSchema = z.object({
+  label: z.string().min(1).max(100),
+  privateKey: z.string().regex(/^(0x)?[a-fA-F0-9]{64}$/, "Invalid private key format"),
+  type: z.enum(["TREASURY", "AGENT"]),
+});
+
+export const walletUpdateSchema = z.object({
+  label: z.string().min(1).max(100).optional(),
+  status: z.enum(["active", "inactive"]).optional(),
+  isDefault: z.boolean().optional(),
+});
+
 export const walletGenerateSchema = z.object({
   label: z.string().min(1).max(100),
   type: z.enum(["TREASURY", "AGENT"]),

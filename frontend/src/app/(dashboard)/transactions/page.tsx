@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatUsdc } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { useToast } from "@/components/ui/Toast";
@@ -184,7 +184,7 @@ export default function TransactionsPage() {
                 <td className="px-5 py-3.5 text-[13px] font-medium text-foreground">{tx.vendor}</td>
                 <td className="px-5 py-3.5 text-[12px] text-muted">{tx.category}</td>
                 <td className="px-5 py-3.5 text-[12px] text-muted">{tx.agent}</td>
-                <td className="px-5 py-3.5 text-[13px] font-semibold font-mono text-foreground">{formatCurrency(tx.amount)}</td>
+                <td className="px-5 py-3.5 text-[13px] font-semibold font-mono text-foreground">{formatUsdc(tx.amount, 4)}</td>
                 <td className="px-5 py-3.5">
                   <span className={cn("text-[10px] font-semibold px-2 py-1 rounded-full uppercase", statusStyle[tx.status])}>
                     {tx.status}

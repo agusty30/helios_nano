@@ -208,6 +208,9 @@ export interface WalletRecord {
   type: "TREASURY" | "AGENT";
   chain: string;
   network: string;
+  status: string;
+  isDefault: boolean;
+  deletedAt: string | null;
   createdAt: string;
 }
 
@@ -244,12 +247,31 @@ export interface TaskRecord {
   command: string;
   commandType: string;
   status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  priority: string;
+  progress: number;
+  retryCount: number;
+  correlationId: string | null;
+  agentId: string | null;
+  agentName: string;
   steps: Array<{ step: number; action: string; status: string; detail: string }>;
   result: Record<string, unknown> | null;
   cost: number;
   executionTimeMs: number | null;
   createdAt: string;
   completedAt: string | null;
+}
+
+export interface ExecutionLogRecord {
+  id: string;
+  taskId: string | null;
+  agentId: string | null;
+  severity: string;
+  component: string;
+  action: string;
+  detail: string;
+  correlationId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface AuditLogEntry {

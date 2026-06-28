@@ -5,10 +5,14 @@ import { prisma } from "@/lib/prisma";
 const SELLER = "0x933a2405f84c224be1ef373ba16e992e1f459682";
 
 const DEFAULT_AGENTS = [
-  { name: "Payment Agent", type: "payment", config: { icon: "CreditCard", description: "Handles x402 nanopayments and USDC transfers on Arc Testnet" } },
-  { name: "Procurement Agent", type: "procurement", config: { icon: "ShoppingCart", description: "Manages vendor payments, contract negotiations, and SaaS subscriptions" } },
-  { name: "Treasury Agent", type: "treasury", config: { icon: "Landmark", description: "Monitors wallet balances, manages reserves, and optimizes yield" } },
-  { name: "Budget Agent", type: "budget", config: { icon: "Wallet", description: "Tracks spending, enforces budgets, and routes requests to optimal tiers" } },
+  { name: "Payment Agent", type: "payment", description: "Handles x402 nanopayments and USDC transfers on Arc Testnet", config: { icon: "CreditCard", description: "Handles x402 nanopayments and USDC transfers on Arc Testnet" } },
+  { name: "Procurement Agent", type: "procurement", description: "Manages vendor payments, contract negotiations, and SaaS subscriptions", config: { icon: "ShoppingCart", description: "Manages vendor payments, contract negotiations, and SaaS subscriptions" } },
+  { name: "Treasury Agent", type: "treasury", description: "Monitors wallet balances, manages reserves, and optimizes yield", config: { icon: "Landmark", description: "Monitors wallet balances, manages reserves, and optimizes yield" } },
+  { name: "Budget Agent", type: "budget", description: "Tracks spending, enforces budgets, and routes requests to optimal tiers", config: { icon: "Wallet", description: "Tracks spending, enforces budgets, and routes requests to optimal tiers" } },
+  { name: "API Cost Agent", type: "api_cost", description: "Monitors API usage costs, tracks per-service spending, and alerts on budget overruns", config: { icon: "Globe", description: "Monitors API usage costs, tracks per-service spending, and alerts on budget overruns" } },
+  { name: "Reporting Agent", type: "reporting", description: "Generates financial reports, spending summaries, and compliance documentation", config: { icon: "FileText", description: "Generates financial reports, spending summaries, and compliance documentation" } },
+  { name: "Optimization Agent", type: "optimization", description: "Analyzes spending patterns and recommends cost reduction strategies", config: { icon: "Sparkles", description: "Analyzes spending patterns and recommends cost reduction strategies" } },
+  { name: "Notification Agent", type: "notification", description: "Sends alerts for budget thresholds, payment failures, and system events", config: { icon: "Bell", description: "Sends alerts for budget thresholds, payment failures, and system events" } },
 ];
 
 const SAMPLE_APPROVALS = [

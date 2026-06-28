@@ -58,6 +58,8 @@ model Organization {
   apiUsages       ApiUsage[]
   budgetRules     BudgetRule[]
   notifications   Notification[]
+  executionLogs   ExecutionLog[]
+  kpiSnapshots    KpiSnapshot[]
 }
 
 // --- Auth Models (NextAuth.js + custom) ---
@@ -170,15 +172,19 @@ model LoginAttempt {
 // --- Business Models ---
 
 model Wallet {
-  id        String     @id @default(cuid())
-  orgId     String
-  label     String
-  address   String
-  type      WalletType
-  chain     String     @default("Arc Testnet")
-  network   String     @default("eip155:5042002")
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id                  String     @id @default(cuid())
+  orgId               String
+  label               String
+  address             String
+  type                WalletType
+  chain               String     @default("Arc Testnet")
+  network             String     @default("eip155:5042002")
+  encryptedPrivateKey String?
+  status              String     @default("active")
+  isDefault           Boolean    @default(false)
+  deletedAt           DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
   org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   agents       Agent[]
@@ -190,21 +196,47 @@ model Wallet {
 }
 
 model Agent {
-  id        String   @id @default(cuid())
-  orgId     String
-  walletId  String?
-  name      String
-  type      String
-  status    String   @default("active")
-  config    Json     @default("{}")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String    @id @default(cuid())
+  orgId          String
+  walletId       String?
+  name           String
+  type           String
+  status         String    @default("active")
+  description    String    @default("")
+  version        String    @default("1.0.0")
+  healthScore    Float     @default(100)
+  memory         Json      @default("{}")
+  lastActivityAt DateTime?
+  lastError      String?
+  config         Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  wallet Wallet?      @relation(fields: [walletId], references: [id])
-  tasks  Task[]
+  org     Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  wallet  Wallet?       @relation(fields: [walletId], references: [id])
+  tasks   Task[]
+  metrics AgentMetric[]
 
   @@index([orgId])
+}
+
+model AgentMetric {
+  id            String   @id @default(cuid())
+  agentId       String
+  orgId         String
+  successCount  Int      @default(0)
+  failureCount  Int      @default(0)
+  totalDuration Int      @default(0)
+  taskCount     Int      @default(0)
+  retryCount    Int      @default(0)
+  period        String
+  periodStart   DateTime
+  createdAt     DateTime @default(now())
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, periodStart])
+  @@unique([agentId, period, periodStart])
 }
 
 model ApiKeyRecord {
@@ -274,6 +306,10 @@ model Task {
   command         String
   commandType     String     @default("general")
   status          TaskStatus @default(PENDING)
+  priority        String     @default("normal")
+  progress        Int        @default(0)
+  retryCount      Int        @default(0)
+  correlationId   String?
   steps           Json       @default("[]")
   result          Json?
   logs            Json       @default("[]")
@@ -282,11 +318,13 @@ model Task {
   createdAt       DateTime   @default(now())
   completedAt     DateTime?
 
-  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  agent Agent?       @relation(fields: [agentId], references: [id])
+  org            Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent          Agent?         @relation(fields: [agentId], references: [id])
+  executionLogs  ExecutionLog[]
 
   @@index([orgId, createdAt])
   @@index([status])
+  @@index([correlationId])
 }
 
 model Transaction {
@@ -458,4 +496,50 @@ model Notification {
 
   @@index([orgId, userId, read])
   @@index([createdAt])
+}
+
+model ExecutionLog {
+  id            String   @id @default(cuid())
+  orgId         String
+  taskId        String?
+  agentId       String?
+  severity      String   @default("info")
+  component     String
+  action        String
+  detail        String
+  correlationId String?
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  task Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, createdAt])
+  @@index([taskId])
+  @@index([correlationId])
+}
+
+model KpiSnapshot {
+  id                   String   @id @default(cuid())
+  orgId                String
+  period               String
+  periodStart          DateTime
+  totalPayments        Int      @default(0)
+  totalVolume          Float    @default(0)
+  avgTransactionSize   Float    @default(0)
+  budgetEfficiency     Float    @default(0)
+  costPerTask          Float    @default(0)
+  taskSuccessRate      Float    @default(0)
+  totalAgentExecutions Int      @default(0)
+  estimatedSavings     Float    @default(0)
+  activeAgents         Int      @default(0)
+  avgExecutionTime     Float    @default(0)
+  totalApiCost         Float    @default(0)
+  totalApiCalls        Int      @default(0)
+  createdAt            DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, period, periodStart])
+  @@index([orgId, periodStart])
 }
