@@ -10,6 +10,8 @@ import RecentTransactions from "@/components/dashboard/RecentTransactions";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
+import { useToast } from "@/components/ui/Toast";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 import type { CanvasMetrics, TransferResponse } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { Wifi, WifiOff } from "lucide-react";
@@ -42,9 +44,12 @@ const MOCK_TRANSFERS: TransferResponse = { transfers: [] };
 
 export default function DashboardPage() {
   const [dbData, setDbData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [seeded, setSeeded] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
+    setLoading(true);
     fetch("/api/dashboard").then(r => r.ok ? r.json() : null).then(data => {
       if (data) {
         setDbData(data);
@@ -57,7 +62,9 @@ export default function DashboardPage() {
           }).catch(() => {});
         }
       }
-    }).catch(() => {});
+    }).catch(() => {
+      toast("Failed to load dashboard data", "error");
+    }).finally(() => setLoading(false));
   }, [seeded]);
 
   const fetchMetrics = useCallback(() => api.fetchCanvasMetrics(), []);
@@ -140,6 +147,8 @@ export default function DashboardPage() {
   }, [dbData]);
 
   const anyLive = !!dbData || metrics.isLive || transfers.isLive;
+
+  if (loading && !dbData) return <SkeletonDashboard />;
 
   return (
     <div className="space-y-6">

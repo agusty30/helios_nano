@@ -63,7 +63,7 @@ export default function TreasuryPanel() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-3 rounded-lg bg-white/[0.02] border border-border">
           <span className="text-[10px] text-muted-dark block mb-1">USDC Balance</span>
           <span className="text-lg font-bold text-foreground">${m.usdc_balance.toFixed(2)}</span>

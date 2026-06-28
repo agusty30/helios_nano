@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { cn, formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
+import { useToast } from "@/components/ui/Toast";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import type { CanvasMetrics } from "@/lib/types";
 import {
   CreditCard, ShoppingCart, Landmark, Wallet, Bot,
@@ -33,6 +35,7 @@ interface DbAgent {
 export default function AgentsPage() {
   const [dbAgents, setDbAgents] = useState<DbAgent[]>([]);
   const [dbLoaded, setDbLoaded] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetch("/api/agents")
@@ -43,7 +46,7 @@ export default function AgentsPage() {
           setDbLoaded(true);
         }
       })
-      .catch(() => {});
+      .catch(() => { toast("Failed to load agents", "error"); });
   }, []);
 
   const fetchMetrics = useCallback(() => api.fetchCanvasMetrics(), []);
@@ -72,7 +75,7 @@ export default function AgentsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary/20 via-primary/10 to-transparent border border-primary/20 p-5"
         >
-          <div className="grid grid-cols-6 gap-4 text-center">
+          <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 text-center">
             <div><span className="text-[10px] text-muted-dark block">Wallet</span><span className="text-[11px] font-mono text-foreground">{metrics.data.wallet_address.slice(0, 6)}...{metrics.data.wallet_address.slice(-4)}</span></div>
             <div><span className="text-[10px] text-muted-dark block">USDC Balance</span><span className="text-sm font-bold text-foreground">${metrics.data.usdc_balance.toFixed(4)}</span></div>
             <div><span className="text-[10px] text-muted-dark block">Throughput</span><span className="text-sm font-bold text-foreground">{metrics.data.active_throughput}/s</span></div>
@@ -83,7 +86,7 @@ export default function AgentsPage() {
         </motion.div>
       )}
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Total Agents", value: totalCount.toString() || "0", icon: Bot, color: "text-primary-light" },
           { label: "Active Now", value: `${activeCount}/${totalCount}`, icon: Activity, color: activeCount > 0 ? "text-success" : "text-muted-dark" },
@@ -108,7 +111,9 @@ export default function AgentsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {dbAgents.length === 0 && !dbLoaded ? (
-          <div className="col-span-2 text-center py-12 text-[13px] text-muted-dark">Loading agents...</div>
+          <>
+            {[1, 2, 3, 4].map(i => <SkeletonCard key={i} />)}
+          </>
         ) : dbAgents.length === 0 ? (
           <div className="col-span-2 text-center py-12 text-[13px] text-muted-dark">No agents configured. Visit the dashboard to seed default agents.</div>
         ) : dbAgents.map((agent, i) => {

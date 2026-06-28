@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { cn, formatCurrency } from "@/lib/utils";
+import { useToast } from "@/components/ui/Toast";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import { CheckCircle2, XCircle, Bot, ThumbsUp, ThumbsDown, Eye, Wifi, WifiOff, Loader2 } from "lucide-react";
 
 const recConfig: Record<string, { color: string; bg: string; icon: React.FC<{ size?: number; className?: string }>; label: string }> = {
@@ -28,6 +30,7 @@ export default function ApprovalsPage() {
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const fetchApprovals = () => {
     fetch("/api/approvals")
@@ -38,7 +41,7 @@ export default function ApprovalsPage() {
           setLoaded(true);
         }
       })
-      .catch(() => {});
+      .catch(() => { toast("Failed to load approvals", "error"); });
   };
 
   useEffect(() => { fetchApprovals(); }, []);
@@ -52,10 +55,11 @@ export default function ApprovalsPage() {
         body: JSON.stringify({ status: action }),
       });
       if (res.ok) {
+        toast(`Request ${action}`, "success");
         fetchApprovals();
       }
     } catch {
-      // silently fail
+      toast("Action failed, please try again", "error");
     } finally {
       setProcessing(null);
     }
@@ -82,6 +86,12 @@ export default function ApprovalsPage() {
           )}
         </div>
       </div>
+
+      {!loaded && (
+        <div className="space-y-4">
+          {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
+        </div>
+      )}
 
       {pending.length === 0 && loaded && (
         <div className="glass-bright rounded-xl p-12 text-center">

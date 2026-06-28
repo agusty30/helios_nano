@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { cn, formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
+import { useToast } from "@/components/ui/Toast";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import type { TransferResponse, Transaction } from "@/lib/types";
 import { Search, Download, ArrowUpDown, Wifi, WifiOff } from "lucide-react";
 
@@ -32,6 +34,8 @@ export default function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dbTransactions, setDbTransactions] = useState<DbTransaction[]>([]);
   const [dbLoaded, setDbLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetch("/api/transactions")
@@ -42,7 +46,8 @@ export default function TransactionsPage() {
           setDbLoaded(true);
         }
       })
-      .catch(() => {});
+      .catch(() => { toast("Failed to load transactions", "error"); })
+      .finally(() => setLoading(false));
   }, []);
 
   const fetchTransfers = useCallback(() => api.fetchTransfers(50), []);
@@ -91,6 +96,15 @@ export default function TransactionsPage() {
 
   const anyLive = dbLoaded || transfers.isLive;
 
+  if (loading && !dbLoaded) {
+    return (
+      <div className="space-y-6">
+        <div><h1 className="text-2xl font-bold text-foreground">Transactions</h1></div>
+        <SkeletonTable rows={8} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -113,7 +127,7 @@ export default function TransactionsPage() {
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-4"
+        className="flex flex-col sm:flex-row items-start sm:items-center gap-4"
       >
         <div className="relative flex-1 max-w-md">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-dark" />
@@ -147,9 +161,9 @@ export default function TransactionsPage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="glass-bright rounded-xl overflow-hidden"
+        className="glass-bright rounded-xl overflow-x-auto"
       >
-        <table className="w-full">
+        <table className="w-full min-w-[700px]">
           <thead>
             <tr className="border-b border-border">
               {["ID", "Vendor", "Category", "Agent", "Amount", "Status", "Time"].map((h) => (
