@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import {
   Hexagon, Bot, ArrowRight, ChevronDown, Zap, Shield, BarChart3, Wallet,
   CreditCard, ShoppingCart, Landmark, PieChart, Check, Globe, Lock,
@@ -50,9 +50,17 @@ function Navbar() {
 
         <div className="hidden md:flex items-center gap-3">
           {session ? (
-            <Link href="/dashboard" className="flex items-center gap-2 bg-primary text-white text-[13px] font-semibold px-5 py-2 rounded-lg hover:brightness-110 transition-all">
-              Dashboard <ArrowRight size={14} />
-            </Link>
+            <>
+              <button
+                onClick={() => signOut({ callbackUrl: "/" })}
+                className="text-[13px] text-muted hover:text-foreground transition-colors px-4 py-2"
+              >
+                Sign Out
+              </button>
+              <Link href="/dashboard" className="flex items-center gap-2 bg-primary text-white text-[13px] font-semibold px-5 py-2 rounded-lg hover:brightness-110 transition-all">
+                Dashboard <ArrowRight size={14} />
+              </Link>
+            </>
           ) : (
             <>
               <Link href="/login" className="text-[13px] text-muted hover:text-foreground transition-colors px-4 py-2">
@@ -77,7 +85,10 @@ function Navbar() {
           ))}
           <div className="flex gap-3 mt-3">
             {session ? (
-              <Link href="/dashboard" className="flex-1 text-center bg-primary text-white text-[13px] font-semibold px-5 py-2.5 rounded-lg">Dashboard</Link>
+              <>
+                <button onClick={() => signOut({ callbackUrl: "/" })} className="flex-1 text-center text-[13px] text-muted border border-white/10 py-2.5 rounded-lg">Sign Out</button>
+                <Link href="/dashboard" className="flex-1 text-center bg-primary text-white text-[13px] font-semibold px-5 py-2.5 rounded-lg">Dashboard</Link>
+              </>
             ) : (
               <>
                 <Link href="/login" className="flex-1 text-center text-[13px] text-muted border border-white/10 py-2.5 rounded-lg">Sign In</Link>

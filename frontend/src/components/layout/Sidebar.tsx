@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Crosshair, Bot, CreditCard, ShoppingCart, Landmark, Wallet,
   ArrowRightLeft, CheckCircle2, PieChart, BarChart3, FileText, Settings, Hexagon,
+  LogOut, User,
 } from "lucide-react";
 
 const nav = [
@@ -29,6 +31,7 @@ const nav = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   return (
     <aside className="w-[260px] h-screen flex flex-col border-r border-border bg-[#0A0E1A] shrink-0">
@@ -88,17 +91,35 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Bottom status */}
-      <div className="px-4 py-4 border-t border-border">
-        <div className="glass rounded-lg px-3 py-2.5">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+      {/* User profile & logout */}
+      <div className="px-4 py-4 border-t border-border space-y-2">
+        {session?.user && (
+          <div className="flex items-center gap-2.5 px-3 py-2">
+            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+              <User size={13} className="text-primary-light" />
             </div>
-            <span className="text-[11px] font-medium text-foreground">All Systems Operational</span>
+            <div className="flex-1 min-w-0">
+              <span className="block text-[12px] font-medium text-foreground truncate">{session.user.name || "User"}</span>
+              <span className="block text-[10px] text-muted-dark truncate">{session.user.email}</span>
+            </div>
           </div>
-          <span className="text-[10px] text-muted-dark font-mono">4 agents active · Arc Testnet</span>
+        )}
+        <button
+          onClick={() => signOut({ callbackUrl: "/" })}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] font-medium text-muted hover:text-danger hover:bg-danger/5 transition-all"
+        >
+          <LogOut size={14} className="text-muted-dark" />
+          Sign Out
+        </button>
+        <div className="glass rounded-lg px-3 py-2">
+          <div className="flex items-center gap-2 mb-0.5">
+            <div className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success" />
+            </div>
+            <span className="text-[10px] font-medium text-foreground">All Systems Operational</span>
+          </div>
+          <span className="text-[9px] text-muted-dark font-mono">Arc Testnet</span>
         </div>
       </div>
     </aside>

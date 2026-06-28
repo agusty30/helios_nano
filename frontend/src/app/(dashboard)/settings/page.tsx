@@ -42,6 +42,7 @@ const TIMEZONES = [
 ];
 
 interface TeamMember {
+  id?: string;
   name: string;
   role: string;
   email: string;
@@ -65,10 +66,11 @@ export default function SettingsPage() {
   const status = useApi(fetchStatus, MOCK_STATUS, 30000);
 
   // --- Organization state ---
-  const [companyName, setCompanyName] = useState("Acme Corp");
-  const [industry, setIndustry] = useState("Technology / SaaS");
+  const [companyName, setCompanyName] = useState("");
+  const [industry, setIndustry] = useState("");
   const [timezone, setTimezone] = useState(detectTimezone);
   const [orgSaved, setOrgSaved] = useState(false);
+  const [orgSaving, setOrgSaving] = useState(false);
 
   // --- Spending Policies state ---
   const [autoApprove, setAutoApprove] = useState("500");
@@ -76,6 +78,7 @@ export default function SettingsPage() {
   const [require2fa, setRequire2fa] = useState(true);
   const [agentLimit, setAgentLimit] = useState("1000");
   const [policySaved, setPolicySaved] = useState(false);
+  const [policySaving, setPolicySaving] = useState(false);
 
   // --- Notification state ---
   const [emailFailed, setEmailFailed] = useState(true);
@@ -90,15 +93,58 @@ export default function SettingsPage() {
   const [copied, setCopied] = useState(false);
 
   // --- Team state ---
-  const [members, setMembers] = useState<TeamMember[]>([
-    { name: "Sarah Chen", role: "Admin", email: "sarah@acmecorp.com" },
-    { name: "Alex Rivera", role: "Finance", email: "alex@acmecorp.com" },
-    { name: "Jordan Kim", role: "Viewer", email: "jordan@acmecorp.com" },
-  ]);
+  const [members, setMembers] = useState<TeamMember[]>([]);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState("Viewer");
   const [teamSaved, setTeamSaved] = useState(false);
+  const [teamAdding, setTeamAdding] = useState(false);
+  const [teamError, setTeamError] = useState("");
+
+  // Load org settings from DB
+  useEffect(() => {
+    fetch("/api/settings/organization")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.organization) {
+          setCompanyName(data.organization.name || "");
+          setIndustry(data.organization.industry || "");
+          if (data.organization.timezone) setTimezone(data.organization.timezone);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Load spending policies from DB
+  useEffect(() => {
+    fetch("/api/settings/policies")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.policy) {
+          setAutoApprove(data.policy.autoApproveThreshold?.toString() || "500");
+          setDailyLimit(data.policy.dailyLimit?.toString() || "10.00");
+          setRequire2fa(data.policy.require2fa ?? true);
+          setAgentLimit(data.policy.agentLimit?.toString() || "1000");
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Load team members from DB
+  const loadTeam = () => {
+    fetch("/api/settings/team")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.members) {
+          setMembers(data.members.map((m: { id: string; name: string; email: string; role: string }) => ({
+            id: m.id, name: m.name || "", email: m.email, role: m.role || "VIEWER",
+          })));
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => { loadTeam(); }, []);
 
   const flashSave = (setter: (v: boolean) => void) => {
     setter(true);
@@ -111,16 +157,74 @@ export default function SettingsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const addMember = () => {
-    if (!newName.trim() || !newEmail.trim()) return;
-    setMembers((prev) => [...prev, { name: newName, role: newRole, email: newEmail }]);
-    setNewName("");
-    setNewEmail("");
-    setNewRole("Viewer");
+  const saveOrg = async () => {
+    setOrgSaving(true);
+    try {
+      const res = await fetch("/api/settings/organization", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: companyName, industry, timezone }),
+      });
+      if (res.ok) flashSave(setOrgSaved);
+    } catch {}
+    setOrgSaving(false);
   };
 
-  const removeMember = (email: string) => {
-    setMembers((prev) => prev.filter((m) => m.email !== email));
+  const savePolicy = async () => {
+    setPolicySaving(true);
+    try {
+      const res = await fetch("/api/settings/policies", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          autoApproveThreshold: parseFloat(autoApprove) || 500,
+          dailyLimit: parseFloat(dailyLimit) || 10,
+          agentLimit: parseFloat(agentLimit) || 1000,
+          require2fa,
+        }),
+      });
+      if (res.ok) flashSave(setPolicySaved);
+    } catch {}
+    setPolicySaving(false);
+  };
+
+  const addMember = async () => {
+    if (!newName.trim() || !newEmail.trim()) return;
+    setTeamAdding(true);
+    setTeamError("");
+    try {
+      const res = await fetch("/api/settings/team", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newName,
+          email: newEmail,
+          password: "Welcome123!",
+          role: newRole.toUpperCase(),
+        }),
+      });
+      if (res.ok) {
+        setNewName("");
+        setNewEmail("");
+        setNewRole("Viewer");
+        loadTeam();
+        flashSave(setTeamSaved);
+      } else {
+        const err = await res.json();
+        setTeamError(err.error || "Failed to add member");
+      }
+    } catch {
+      setTeamError("Network error");
+    }
+    setTeamAdding(false);
+  };
+
+  const removeMember = async (member: TeamMember) => {
+    if (!member.id) return;
+    try {
+      const res = await fetch(`/api/settings/team?id=${member.id}`, { method: "DELETE" });
+      if (res.ok) loadTeam();
+    } catch {}
   };
 
   return (
@@ -156,7 +260,7 @@ export default function SettingsPage() {
             { label: "Network", value: `${status.data.chainName} (Chain ${status.data.chainId})` },
             { label: "Seller Address", value: status.data.seller },
             { label: "Default Currency", value: "USDC (Native)" },
-            { label: "Settlement Protocol", value: "x402 + EIP-3009" },
+            { label: "Settlement Protocol", value: "x402" },
             { label: "Gateway", value: "Circle Gateway (gas-free)" },
             { label: "Nano Price", value: status.data.prices.nano },
             { label: "Hello World Price", value: status.data.prices.helloWorld },
@@ -225,10 +329,12 @@ export default function SettingsPage() {
             </div>
           </div>
           <button
-            onClick={() => flashSave(setOrgSaved)}
+            onClick={saveOrg}
+            disabled={orgSaving}
             className={cn(
               "mt-5 flex items-center gap-2 text-[11px] font-medium px-4 py-2 rounded-lg transition-all",
-              orgSaved ? "bg-success/20 text-success" : "bg-primary text-white hover:bg-primary/80"
+              orgSaved ? "bg-success/20 text-success" : "bg-primary text-white hover:bg-primary/80",
+              orgSaving && "opacity-50"
             )}
           >
             {orgSaved ? <><Check size={12} /> Saved</> : <><Save size={12} /> Save Changes</>}
@@ -294,10 +400,12 @@ export default function SettingsPage() {
             </div>
           </div>
           <button
-            onClick={() => flashSave(setPolicySaved)}
+            onClick={savePolicy}
+            disabled={policySaving}
             className={cn(
               "mt-5 flex items-center gap-2 text-[11px] font-medium px-4 py-2 rounded-lg transition-all",
-              policySaved ? "bg-success/20 text-success" : "bg-primary text-white hover:bg-primary/80"
+              policySaved ? "bg-success/20 text-success" : "bg-primary text-white hover:bg-primary/80",
+              policySaving && "opacity-50"
             )}
           >
             {policySaved ? <><Check size={12} /> Saved</> : <><Save size={12} /> Save Changes</>}
@@ -440,7 +548,7 @@ export default function SettingsPage() {
                 <option value="Viewer">Viewer</option>
               </select>
               <button
-                onClick={() => removeMember(member.email)}
+                onClick={() => removeMember(member)}
                 className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-danger/10 text-muted-dark hover:text-danger transition-all"
               >
                 <Trash2 size={12} />
@@ -478,23 +586,20 @@ export default function SettingsPage() {
             </select>
             <button
               onClick={addMember}
-              disabled={!newName.trim() || !newEmail.trim()}
+              disabled={!newName.trim() || !newEmail.trim() || teamAdding}
               className="flex items-center justify-center gap-1.5 text-[11px] font-medium px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              <Plus size={12} /> Add
+              <Plus size={12} /> {teamAdding ? "Adding..." : "Add"}
             </button>
           </div>
+          {teamError && <p className="text-[11px] text-danger mt-2">{teamError}</p>}
         </div>
 
-        <button
-          onClick={() => flashSave(setTeamSaved)}
-          className={cn(
-            "mt-5 flex items-center gap-2 text-[11px] font-medium px-4 py-2 rounded-lg transition-all",
-            teamSaved ? "bg-success/20 text-success" : "bg-primary text-white hover:bg-primary/80"
-          )}
-        >
-          {teamSaved ? <><Check size={12} /> Saved</> : <><Save size={12} /> Save Team</>}
-        </button>
+        {teamSaved && (
+          <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-success">
+            <Check size={12} /> Team updated
+          </div>
+        )}
       </motion.div>
     </div>
   );
