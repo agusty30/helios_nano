@@ -47,7 +47,11 @@ export default function RegisterPage() {
         return;
       }
 
-      router.push(`/verify?email=${encodeURIComponent(email)}`);
+      if (data.requireVerification) {
+        router.push(`/verify?email=${encodeURIComponent(email)}`);
+      } else {
+        router.push("/login");
+      }
     } catch {
       setError("Network error. Please try again.");
       setLoading(false);

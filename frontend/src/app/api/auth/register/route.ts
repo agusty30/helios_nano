@@ -52,27 +52,44 @@ export async function POST(request: NextRequest) {
       data: { orgId: org.id },
     });
 
-    const code = crypto.randomInt(100000, 999999).toString();
-    const codeHash = await bcrypt.hash(code, 10);
+    const hasResendKey = !!process.env.RESEND_API_KEY;
 
-    await prisma.emailVerification.create({
-      data: {
-        userId: user.id,
-        codeHash,
-        expires: new Date(Date.now() + 10 * 60 * 1000),
-      },
-    });
+    if (hasResendKey) {
+      const code = crypto.randomInt(100000, 999999).toString();
+      const codeHash = await bcrypt.hash(code, 10);
 
-    try {
-      await sendVerificationEmail(email, code, firstName);
-    } catch (emailErr) {
-      console.error("Email send error:", emailErr);
+      await prisma.emailVerification.create({
+        data: {
+          userId: user.id,
+          codeHash,
+          expires: new Date(Date.now() + 10 * 60 * 1000),
+        },
+      });
+
+      try {
+        await sendVerificationEmail(email, code, firstName);
+      } catch (emailErr) {
+        console.error("Email send error:", emailErr);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: "Account created. Check your email for the verification code.",
+        email: user.email,
+        requireVerification: true,
+      }, { status: 201 });
     }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: new Date() },
+    });
 
     return NextResponse.json({
       success: true,
-      message: "Account created. Check your email for the verification code.",
+      message: "Account created successfully. You can now sign in.",
       email: user.email,
+      requireVerification: false,
     }, { status: 201 });
   } catch (error: unknown) {
     console.error("Register error:", error);

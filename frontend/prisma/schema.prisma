@@ -182,7 +182,9 @@ model Wallet {
 
   org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   agents       Agent[]
-  transactions Transaction[]
+  transactions Transaction[] @relation("WalletTransactions")
+  outgoingTransfers Transaction[] @relation("FromWalletTransactions")
+  incomingTransfers Transaction[] @relation("ToWalletTransactions")
 
   @@index([orgId])
 }
@@ -288,22 +290,29 @@ model Task {
 }
 
 model Transaction {
-  id        String            @id @default(cuid())
-  orgId     String
-  walletId  String?
-  type      String
-  amount    Float
-  currency  String            @default("USDC")
-  status    TransactionStatus @default(PENDING)
-  reference String?
-  metadata  Json              @default("{}")
-  createdAt DateTime          @default(now())
+  id           String            @id @default(cuid())
+  orgId        String
+  walletId     String?
+  type         String
+  amount       Float
+  currency     String            @default("USDC")
+  status       TransactionStatus @default(PENDING)
+  reference    String?
+  txHash       String?
+  fromWalletId String?
+  toWalletId   String?
+  metadata     Json              @default("{}")
+  createdAt    DateTime          @default(now())
 
-  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  wallet Wallet?      @relation(fields: [walletId], references: [id])
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  wallet     Wallet?      @relation("WalletTransactions", fields: [walletId], references: [id])
+  fromWallet Wallet?      @relation("FromWalletTransactions", fields: [fromWalletId], references: [id])
+  toWallet   Wallet?      @relation("ToWalletTransactions", fields: [toWalletId], references: [id])
 
   @@index([orgId, createdAt])
   @@index([walletId])
+  @@index([fromWalletId])
+  @@index([toWalletId])
 }
 
 model Approval {

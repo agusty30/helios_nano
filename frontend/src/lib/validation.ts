@@ -38,6 +38,17 @@ export const walletCreateSchema = z.object({
   type: z.enum(["TREASURY", "AGENT"]),
 });
 
+export const walletGenerateSchema = z.object({
+  label: z.string().min(1).max(100),
+  type: z.enum(["TREASURY", "AGENT"]),
+});
+
+export const walletTransferSchema = z.object({
+  toWalletId: z.string().min(1),
+  amount: z.number().positive(),
+  note: z.string().max(200).optional(),
+});
+
 export const approvalActionSchema = z.object({
   status: z.enum(["approved", "rejected"]),
 });

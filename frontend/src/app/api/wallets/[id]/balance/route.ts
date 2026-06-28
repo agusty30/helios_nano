@@ -18,20 +18,18 @@ export async function GET(
       return NextResponse.json({ error: "Wallet not found" }, { status: 404 });
     }
 
-    const rpcUrl = "https://rpc-gel-sepolia.inkonchain.com";
+    const rpcUrl = process.env.ARC_TESTNET_RPC || "https://rpc-gel-sepolia.inkonchain.com";
 
     try {
-      const usdcContract = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
-      const balanceOfSelector = "0x70a08231";
-      const paddedAddress = wallet.address.slice(2).padStart(64, "0");
+      const paddedAddress = "0x" + wallet.address.slice(2).padStart(64, "0");
 
       const response = await fetch(rpcUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           jsonrpc: "2.0",
-          method: "eth_call",
-          params: [{ to: usdcContract, data: `${balanceOfSelector}${paddedAddress}` }, "latest"],
+          method: "eth_getBalance",
+          params: [wallet.address, "latest"],
           id: 1,
         }),
       });

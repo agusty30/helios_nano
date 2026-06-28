@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
   Wallet, Plus, Copy, ExternalLink, Loader2, Shield, Bot, X,
+  ArrowRightLeft, ArrowDownToLine, ArrowUpFromLine, History,
+  AlertTriangle, CheckCircle2, Key, Import,
 } from "lucide-react";
 
 interface WalletRecord {
@@ -23,14 +25,59 @@ interface WalletBalance {
   loading: boolean;
 }
 
+interface WalletTx {
+  id: string;
+  type: string;
+  amount: number;
+  status: string;
+  reference: string | null;
+  txHash: string | null;
+  fromWalletId: string | null;
+  toWalletId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+type ModalType = "create" | "import" | "deposit" | "transfer" | "transactions" | null;
+
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<WalletRecord[]>([]);
   const [balances, setBalances] = useState<Record<string, WalletBalance>>({});
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ label: "", address: "", type: "AGENT" });
   const [copied, setCopied] = useState<string | null>(null);
+
+  const [modal, setModal] = useState<ModalType>(null);
+  const [selectedWallet, setSelectedWallet] = useState<WalletRecord | null>(null);
+
+  // Create wallet state
+  const [createForm, setCreateForm] = useState({ label: "", type: "TREASURY" });
+  const [creating, setCreating] = useState(false);
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [keyCopied, setKeyCopied] = useState(false);
+
+  // Import wallet state
+  const [importForm, setImportForm] = useState({ label: "", address: "", type: "AGENT" });
+  const [importing, setImporting] = useState(false);
+
+  // Transfer state
+  const [transferForm, setTransferForm] = useState({ toWalletId: "", amount: "", note: "" });
+  const [transferring, setTransferring] = useState(false);
+  const [transferResult, setTransferResult] = useState<{ txHash: string; explorerUrl: string } | null>(null);
+
+  // Transactions state
+  const [transactions, setTransactions] = useState<WalletTx[]>([]);
+  const [txLoading, setTxLoading] = useState(false);
+
+  const fetchBalance = useCallback((walletId: string) => {
+    setBalances((prev) => ({ ...prev, [walletId]: { balance: prev[walletId]?.balance || 0, loading: true } }));
+    fetch(`/api/wallets/${walletId}/balance`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) setBalances((prev) => ({ ...prev, [walletId]: { balance: d.balance, loading: false } }));
+        else setBalances((prev) => ({ ...prev, [walletId]: { balance: 0, loading: false } }));
+      })
+      .catch(() => setBalances((prev) => ({ ...prev, [walletId]: { balance: 0, loading: false } })));
+  }, []);
 
   useEffect(() => {
     fetch("/api/wallets")
@@ -38,127 +85,145 @@ export default function WalletsPage() {
       .then((data) => {
         const wList = data.wallets || [];
         setWallets(wList);
-        for (const w of wList) {
-          setBalances((prev) => ({ ...prev, [w.id]: { balance: 0, loading: true } }));
-          fetch(`/api/wallets/${w.id}/balance`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((d) => {
-              if (d) setBalances((prev) => ({ ...prev, [w.id]: { balance: d.balance, loading: false } }));
-            })
-            .catch(() => setBalances((prev) => ({ ...prev, [w.id]: { balance: 0, loading: false } })));
-        }
+        for (const w of wList) fetchBalance(w.id);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [fetchBalance]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
     try {
-      const res = await fetch("/api/wallets", {
+      const res = await fetch("/api/wallets/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(createForm),
       });
       const data = await res.json();
       if (data.wallet) {
         setWallets((prev) => [data.wallet, ...prev]);
-        setShowCreate(false);
-        setForm({ label: "", address: "", type: "AGENT" });
+        setGeneratedKey(data.privateKey);
+        fetchBalance(data.wallet.id);
       }
     } catch {}
     setCreating(false);
   };
 
-  const copyAddress = (address: string) => {
-    navigator.clipboard.writeText(address);
-    setCopied(address);
+  const handleImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setImporting(true);
+    try {
+      const res = await fetch("/api/wallets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(importForm),
+      });
+      const data = await res.json();
+      if (data.wallet) {
+        setWallets((prev) => [data.wallet, ...prev]);
+        setModal(null);
+        setImportForm({ label: "", address: "", type: "AGENT" });
+        fetchBalance(data.wallet.id);
+      }
+    } catch {}
+    setImporting(false);
+  };
+
+  const handleTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWallet) return;
+    setTransferring(true);
+    try {
+      const res = await fetch(`/api/wallets/${selectedWallet.id}/transfer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toWalletId: transferForm.toWalletId,
+          amount: parseFloat(transferForm.amount),
+          note: transferForm.note || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.transaction) {
+        setTransferResult({ txHash: data.transaction.txHash, explorerUrl: data.explorerUrl });
+        fetchBalance(selectedWallet.id);
+        fetchBalance(transferForm.toWalletId);
+      }
+    } catch {}
+    setTransferring(false);
+  };
+
+  const loadTransactions = async (wallet: WalletRecord) => {
+    setSelectedWallet(wallet);
+    setModal("transactions");
+    setTxLoading(true);
+    try {
+      const res = await fetch(`/api/wallets/${wallet.id}/transactions?limit=50`);
+      const data = await res.json();
+      setTransactions(data.transactions || []);
+    } catch {
+      setTransactions([]);
+    }
+    setTxLoading(false);
+  };
+
+  const openTransfer = (wallet: WalletRecord) => {
+    setSelectedWallet(wallet);
+    setTransferForm({ toWalletId: "", amount: "", note: "" });
+    setTransferResult(null);
+    setModal("transfer");
+  };
+
+  const openDeposit = (wallet: WalletRecord) => {
+    setSelectedWallet(wallet);
+    setModal("deposit");
+  };
+
+  const copyText = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(text);
     setTimeout(() => setCopied(null), 2000);
   };
 
+  const closeModal = () => {
+    setModal(null);
+    setSelectedWallet(null);
+    setGeneratedKey(null);
+    setKeyCopied(false);
+    setTransferResult(null);
+    setCreateForm({ label: "", type: "TREASURY" });
+  };
+
+  const totalBalance = Object.values(balances).reduce((sum, b) => sum + b.balance, 0);
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Wallets</h1>
-          <p className="text-sm text-muted-dark mt-1">Manage treasury and agent wallets</p>
+          <p className="text-sm text-muted-dark mt-1">Manage treasury and agent wallets on Arc Testnet</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-[13px] font-medium rounded-lg hover:bg-primary/80 transition-colors"
-        >
-          <Plus size={14} /> Add Wallet
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setGeneratedKey(null); setCreateForm({ label: "", type: "TREASURY" }); setModal("create"); }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-[13px] font-medium rounded-lg hover:bg-primary/80 transition-colors"
+          >
+            <Plus size={14} /> Create Wallet
+          </button>
+          <button
+            onClick={() => { setImportForm({ label: "", address: "", type: "AGENT" }); setModal("import"); }}
+            className="flex items-center gap-2 px-4 py-2 bg-white/[0.04] border border-border text-[13px] font-medium text-muted rounded-lg hover:text-foreground hover:border-primary/30 transition-colors"
+          >
+            <Import size={14} /> Import
+          </button>
+        </div>
       </div>
-
-      {/* Create wallet form */}
-      {showCreate && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-bright rounded-xl p-6"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-foreground">Add New Wallet</h3>
-            <button onClick={() => setShowCreate(false)} className="text-muted-dark hover:text-foreground">
-              <X size={16} />
-            </button>
-          </div>
-          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="text-[11px] text-muted-dark mb-1 block">Label</label>
-              <input
-                type="text"
-                value={form.label}
-                onChange={(e) => setForm({ ...form, label: e.target.value })}
-                required
-                className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[13px] text-foreground focus:outline-none focus:border-primary/50 transition-all"
-                placeholder="Main Treasury"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="text-[11px] text-muted-dark mb-1 block">Address</label>
-              <input
-                type="text"
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                required
-                className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[13px] text-foreground font-mono focus:outline-none focus:border-primary/50 transition-all"
-                placeholder="0x..."
-              />
-            </div>
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <label className="text-[11px] text-muted-dark mb-1 block">Type</label>
-                <select
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
-                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[13px] text-foreground focus:outline-none focus:border-primary/50 transition-all"
-                >
-                  <option value="AGENT">Agent</option>
-                  <option value="TREASURY">Treasury</option>
-                </select>
-              </div>
-              <button
-                type="submit"
-                disabled={creating}
-                className="px-4 py-2 bg-primary text-white text-[13px] font-medium rounded-lg hover:bg-primary/80 transition-colors disabled:opacity-50"
-              >
-                {creating ? <Loader2 size={14} className="animate-spin" /> : "Add"}
-              </button>
-            </div>
-          </form>
-        </motion.div>
-      )}
 
       {/* Portfolio summary */}
       {wallets.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-bright rounded-xl p-5"
-        >
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="glass-bright rounded-xl p-5">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <span className="text-[10px] text-muted-dark uppercase tracking-wide">Total Wallets</span>
@@ -174,9 +239,7 @@ export default function WalletsPage() {
             </div>
             <div>
               <span className="text-[10px] text-muted-dark uppercase tracking-wide">Portfolio Value</span>
-              <p className="text-lg font-bold text-foreground">
-                ${Object.values(balances).reduce((sum, b) => sum + b.balance, 0).toFixed(4)} USDC
-              </p>
+              <p className="text-lg font-bold text-foreground">${totalBalance.toFixed(4)} USDC</p>
             </div>
           </div>
         </motion.div>
@@ -192,8 +255,8 @@ export default function WalletsPage() {
           <EmptyState
             icon={Wallet}
             title="No wallets yet"
-            description="Add your first wallet to start managing your treasury and agent funds."
-            action={{ label: "Add Wallet", onClick: () => setShowCreate(true) }}
+            description="Create your first treasury or agent wallet to get started."
+            action={{ label: "Create Wallet", onClick: () => setModal("create") }}
           />
         </div>
       ) : (
@@ -241,7 +304,7 @@ export default function WalletsPage() {
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-[11px] font-mono text-muted-dark flex-1 truncate">{wallet.address}</span>
                 <button
-                  onClick={() => copyAddress(wallet.address)}
+                  onClick={() => copyText(wallet.address)}
                   className={cn(
                     "p-1.5 rounded-md transition-colors",
                     copied === wallet.address ? "text-success bg-success/10" : "text-muted-dark hover:text-foreground hover:bg-white/[0.04]"
@@ -259,7 +322,29 @@ export default function WalletsPage() {
                 </a>
               </div>
 
-              <div className="flex items-center gap-3 text-[10px] text-muted-dark">
+              {/* Quick actions */}
+              <div className="flex items-center gap-2 pt-3 border-t border-border">
+                <button
+                  onClick={() => openDeposit(wallet)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-muted-dark hover:text-success hover:bg-success/5 rounded-lg transition-colors"
+                >
+                  <ArrowDownToLine size={12} /> Deposit
+                </button>
+                <button
+                  onClick={() => openTransfer(wallet)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-muted-dark hover:text-primary-light hover:bg-primary/5 rounded-lg transition-colors"
+                >
+                  <ArrowRightLeft size={12} /> Transfer
+                </button>
+                <button
+                  onClick={() => loadTransactions(wallet)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-muted-dark hover:text-foreground hover:bg-white/[0.04] rounded-lg transition-colors"
+                >
+                  <History size={12} /> History
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 text-[10px] text-muted-dark mt-3">
                 <span>{wallet.chain}</span>
                 <span>·</span>
                 <span>{new Date(wallet.createdAt).toLocaleDateString()}</span>
@@ -268,6 +353,404 @@ export default function WalletsPage() {
           ))}
         </div>
       )}
+
+      {/* Modals */}
+      <AnimatePresence>
+        {modal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-[#0F1629] border border-border rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl"
+            >
+              {/* Create Wallet Modal */}
+              {modal === "create" && (
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-lg font-semibold text-foreground">Create Wallet</h3>
+                    <button onClick={closeModal} className="text-muted-dark hover:text-foreground"><X size={18} /></button>
+                  </div>
+
+                  {generatedKey ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-success/10 border border-success/20">
+                        <CheckCircle2 size={16} className="text-success shrink-0" />
+                        <span className="text-[13px] text-success">Wallet created successfully!</span>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-warning/5 border border-warning/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle size={14} className="text-warning" />
+                          <span className="text-[12px] font-semibold text-warning">Save your private key now</span>
+                        </div>
+                        <p className="text-[11px] text-muted-dark mb-3">This key will NOT be shown again. Store it securely.</p>
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 text-[10px] font-mono text-foreground bg-black/30 p-2 rounded-lg break-all select-all">
+                            {generatedKey}
+                          </code>
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(generatedKey); setKeyCopied(true); }}
+                            className={cn(
+                              "p-2 rounded-lg shrink-0 transition-colors",
+                              keyCopied ? "text-success bg-success/10" : "text-muted-dark hover:text-foreground hover:bg-white/[0.04]"
+                            )}
+                          >
+                            {keyCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={closeModal}
+                        className="w-full py-2.5 bg-primary text-white text-[13px] font-medium rounded-lg hover:bg-primary/80 transition-colors"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleCreate} className="space-y-4">
+                      <div>
+                        <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Wallet Type</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: "TREASURY", icon: Shield, label: "Treasury", desc: "Organization funds" },
+                            { value: "AGENT", icon: Bot, label: "Agent", desc: "Autonomous spending" },
+                          ].map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setCreateForm({ ...createForm, type: opt.value })}
+                              className={cn(
+                                "p-3 rounded-xl border text-left transition-all",
+                                createForm.type === opt.value
+                                  ? "border-primary/50 bg-primary/5"
+                                  : "border-border hover:border-primary/20"
+                              )}
+                            >
+                              <opt.icon size={16} className={cn(
+                                "mb-1",
+                                opt.value === "TREASURY" ? "text-primary-light" : "text-success"
+                              )} />
+                              <span className="text-[13px] font-medium text-foreground block">{opt.label}</span>
+                              <span className="text-[10px] text-muted-dark">{opt.desc}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Label</label>
+                        <input
+                          type="text"
+                          value={createForm.label}
+                          onChange={(e) => setCreateForm({ ...createForm, label: e.target.value })}
+                          required
+                          className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
+                          placeholder={createForm.type === "TREASURY" ? "Main Treasury" : "Payment Agent"}
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={creating || !createForm.label.trim()}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white text-[13px] font-medium rounded-lg hover:bg-primary/80 transition-colors disabled:opacity-50"
+                      >
+                        {creating ? <Loader2 size={14} className="animate-spin" /> : <><Key size={14} /> Generate Wallet</>}
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* Import Wallet Modal */}
+              {modal === "import" && (
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-lg font-semibold text-foreground">Import Wallet</h3>
+                    <button onClick={closeModal} className="text-muted-dark hover:text-foreground"><X size={18} /></button>
+                  </div>
+                  <form onSubmit={handleImport} className="space-y-4">
+                    <div>
+                      <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Label</label>
+                      <input
+                        type="text"
+                        value={importForm.label}
+                        onChange={(e) => setImportForm({ ...importForm, label: e.target.value })}
+                        required
+                        className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
+                        placeholder="My Wallet"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Wallet Address</label>
+                      <input
+                        type="text"
+                        value={importForm.address}
+                        onChange={(e) => setImportForm({ ...importForm, address: e.target.value })}
+                        required
+                        pattern="^0x[a-fA-F0-9]{40}$"
+                        className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground font-mono placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
+                        placeholder="0x..."
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Type</label>
+                      <select
+                        value={importForm.type}
+                        onChange={(e) => setImportForm({ ...importForm, type: e.target.value })}
+                        className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground focus:outline-none focus:border-primary/50 transition-all"
+                      >
+                        <option value="AGENT">Agent</option>
+                        <option value="TREASURY">Treasury</option>
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={importing}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white text-[13px] font-medium rounded-lg hover:bg-primary/80 transition-colors disabled:opacity-50"
+                    >
+                      {importing ? <Loader2 size={14} className="animate-spin" /> : <><Import size={14} /> Import Wallet</>}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Deposit Modal */}
+              {modal === "deposit" && selectedWallet && (
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-lg font-semibold text-foreground">Deposit USDC</h3>
+                    <button onClick={closeModal} className="text-muted-dark hover:text-foreground"><X size={18} /></button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-white/[0.02] border border-border">
+                      <span className="text-[10px] text-muted-dark uppercase tracking-wide block mb-1">Send USDC to this address</span>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-[12px] font-mono text-foreground break-all select-all">{selectedWallet.address}</code>
+                        <button
+                          onClick={() => copyText(selectedWallet.address)}
+                          className={cn(
+                            "p-2 rounded-lg shrink-0 transition-colors",
+                            copied === selectedWallet.address ? "text-success bg-success/10" : "text-muted-dark hover:text-foreground hover:bg-white/[0.04]"
+                          )}
+                        >
+                          {copied === selectedWallet.address ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-primary/5 border border-primary/20">
+                      <p className="text-[12px] text-primary-light mb-1 font-medium">Arc Testnet (Chain ID: 5042002)</p>
+                      <p className="text-[11px] text-muted-dark">USDC is the native gas token on Arc Testnet. Send USDC directly to this address.</p>
+                    </div>
+
+                    <a
+                      href="https://faucet.circle.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-white/[0.04] border border-border text-[13px] font-medium text-foreground rounded-lg hover:border-primary/30 hover:bg-white/[0.06] transition-colors"
+                    >
+                      <ExternalLink size={14} /> Get Testnet USDC from Circle Faucet
+                    </a>
+
+                    <a
+                      href={`https://testnet.arcscan.app/address/${selectedWallet.address}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 text-[13px] font-medium text-muted-dark hover:text-foreground transition-colors"
+                    >
+                      <ExternalLink size={12} /> View on Block Explorer
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Transfer Modal */}
+              {modal === "transfer" && selectedWallet && (
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-lg font-semibold text-foreground">Transfer USDC</h3>
+                    <button onClick={closeModal} className="text-muted-dark hover:text-foreground"><X size={18} /></button>
+                  </div>
+
+                  {transferResult ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-success/10 border border-success/20">
+                        <CheckCircle2 size={16} className="text-success shrink-0" />
+                        <span className="text-[13px] text-success">Transfer completed!</span>
+                      </div>
+                      <div className="p-3 rounded-xl bg-white/[0.02] border border-border">
+                        <span className="text-[10px] text-muted-dark block mb-1">Transaction Hash</span>
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 text-[10px] font-mono text-foreground truncate">{transferResult.txHash}</code>
+                          <a
+                            href={transferResult.explorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-md text-muted-dark hover:text-foreground hover:bg-white/[0.04] transition-colors shrink-0"
+                          >
+                            <ExternalLink size={12} />
+                          </a>
+                        </div>
+                      </div>
+                      <button onClick={closeModal} className="w-full py-2.5 bg-primary text-white text-[13px] font-medium rounded-lg hover:bg-primary/80 transition-colors">
+                        Done
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleTransfer} className="space-y-4">
+                      <div className="p-3 rounded-xl bg-white/[0.02] border border-border">
+                        <span className="text-[10px] text-muted-dark block">From</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          {selectedWallet.type === "TREASURY" ? <Shield size={14} className="text-primary-light" /> : <Bot size={14} className="text-success" />}
+                          <span className="text-[13px] font-medium text-foreground">{selectedWallet.label}</span>
+                          <span className="text-[11px] text-muted-dark ml-auto">
+                            ${(balances[selectedWallet.id]?.balance || 0).toFixed(4)} USDC
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">To Wallet</label>
+                        <select
+                          value={transferForm.toWalletId}
+                          onChange={(e) => setTransferForm({ ...transferForm, toWalletId: e.target.value })}
+                          required
+                          className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground focus:outline-none focus:border-primary/50 transition-all"
+                        >
+                          <option value="">Select destination wallet</option>
+                          {wallets.filter(w => w.id !== selectedWallet.id).map(w => (
+                            <option key={w.id} value={w.id}>
+                              {w.label} ({w.type}) — ${(balances[w.id]?.balance || 0).toFixed(4)} USDC
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Amount (USDC)</label>
+                        <input
+                          type="number"
+                          step="0.000001"
+                          min="0.000001"
+                          value={transferForm.amount}
+                          onChange={(e) => setTransferForm({ ...transferForm, amount: e.target.value })}
+                          required
+                          className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
+                          placeholder="0.00"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Note (optional)</label>
+                        <input
+                          type="text"
+                          value={transferForm.note}
+                          onChange={(e) => setTransferForm({ ...transferForm, note: e.target.value })}
+                          className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
+                          placeholder="Agent funding allocation"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={transferring || !transferForm.toWalletId || !transferForm.amount}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white text-[13px] font-medium rounded-lg hover:bg-primary/80 transition-colors disabled:opacity-50"
+                      >
+                        {transferring ? <Loader2 size={14} className="animate-spin" /> : <><ArrowRightLeft size={14} /> Transfer</>}
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* Transaction History Modal */}
+              {modal === "transactions" && selectedWallet && (
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">Transaction History</h3>
+                      <p className="text-[12px] text-muted-dark">{selectedWallet.label}</p>
+                    </div>
+                    <button onClick={closeModal} className="text-muted-dark hover:text-foreground"><X size={18} /></button>
+                  </div>
+
+                  {txLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 size={20} className="text-primary-light animate-spin" />
+                    </div>
+                  ) : transactions.length === 0 ? (
+                    <div className="text-center py-12">
+                      <History size={24} className="text-muted-dark mx-auto mb-2" />
+                      <p className="text-[13px] text-muted-dark">No transactions yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {transactions.map((tx) => {
+                        const meta = tx.metadata as Record<string, Record<string, string>>;
+                        const isOutgoing = tx.fromWalletId === selectedWallet.id;
+                        return (
+                          <div key={tx.id} className="p-3 rounded-xl bg-white/[0.02] border border-border">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                {tx.type === "transfer" ? (
+                                  <ArrowRightLeft size={12} className="text-primary-light" />
+                                ) : tx.type === "deposit" ? (
+                                  <ArrowDownToLine size={12} className="text-success" />
+                                ) : (
+                                  <ArrowUpFromLine size={12} className="text-warning" />
+                                )}
+                                <span className="text-[12px] font-medium text-foreground capitalize">{tx.type}</span>
+                              </div>
+                              <span className={cn(
+                                "text-[13px] font-semibold font-mono",
+                                isOutgoing ? "text-danger" : "text-success"
+                              )}>
+                                {isOutgoing ? "-" : "+"}${tx.amount.toFixed(4)}
+                              </span>
+                            </div>
+                            {tx.reference && (
+                              <p className="text-[11px] text-muted-dark mb-1">{tx.reference}</p>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-muted-dark">
+                                {new Date(tx.createdAt).toLocaleString()}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase",
+                                  tx.status === "COMPLETED" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
+                                )}>
+                                  {tx.status}
+                                </span>
+                                {tx.txHash && (
+                                  <a
+                                    href={`https://testnet.arcscan.app/tx/${tx.txHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-primary-light hover:text-primary flex items-center gap-1"
+                                  >
+                                    <ExternalLink size={10} /> Tx
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

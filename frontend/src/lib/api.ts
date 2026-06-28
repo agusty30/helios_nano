@@ -4,6 +4,7 @@ import type {
   PaidServiceResponse, CanvasMetrics, AgentRouteResponse, TransferResponse,
   OrganizationRecord, WalletRecord, TaskRecord, AuditLogEntry, PaymentPolicyRecord,
   VendorRecord, ApiServiceRecord, ApiCostsResponse,
+  WalletGenerateResponse, WalletTransactionRecord, TransferRequest,
 } from "./types";
 
 async function get<T>(url: string): Promise<T | null> {
@@ -81,6 +82,14 @@ export const api = {
   listWallets: () => get<{ wallets: WalletRecord[] }>("/api/wallets"),
   createWallet: (data: { label: string; address: string; type: string }) =>
     post<{ wallet: WalletRecord }>("/api/wallets", data),
+  generateWallet: (data: { label: string; type: string }) =>
+    post<WalletGenerateResponse>("/api/wallets/generate", data),
+  getWalletBalance: (id: string) =>
+    get<{ walletId: string; address: string; balance: number; chain: string }>(`/api/wallets/${id}/balance`),
+  transferFunds: (fromWalletId: string, data: TransferRequest) =>
+    post<{ transaction: WalletTransactionRecord; explorerUrl: string }>(`/api/wallets/${fromWalletId}/transfer`, data),
+  getWalletTransactions: (id: string, limit = 50) =>
+    get<{ transactions: WalletTransactionRecord[]; total: number }>(`/api/wallets/${id}/transactions?limit=${limit}`),
 
   // Vendors
   listVendors: () => get<{ vendors: VendorRecord[] }>("/api/vendors"),

@@ -211,6 +211,34 @@ export interface WalletRecord {
   createdAt: string;
 }
 
+export interface WalletGenerateResponse {
+  wallet: WalletRecord;
+  privateKey: string;
+  warning: string;
+}
+
+export interface WalletTransactionRecord {
+  id: string;
+  orgId: string;
+  walletId: string | null;
+  fromWalletId: string | null;
+  toWalletId: string | null;
+  type: string;
+  amount: number;
+  currency: string;
+  status: string;
+  reference: string | null;
+  txHash: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface TransferRequest {
+  toWalletId: string;
+  amount: number;
+  note?: string;
+}
+
 export interface TaskRecord {
   id: string;
   command: string;
