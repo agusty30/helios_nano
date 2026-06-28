@@ -2,6 +2,7 @@
 
 import Sidebar from "@/components/layout/Sidebar";
 import NotificationBell from "@/components/ui/NotificationBell";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { useState } from "react";
 import { Menu } from "lucide-react";
 
@@ -47,7 +48,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <NotificationBell />
         </div>
         <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </div>
       </main>
     </div>
