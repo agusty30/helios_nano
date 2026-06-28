@@ -7,48 +7,35 @@ on:
     branches: [main]
 
 jobs:
-  typecheck:
-    name: Typecheck
+  ci:
+    name: Lint, Test, Build
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: npm
-      - run: npm ci
-      - run: npm run agent:typecheck
+          cache-dependency-path: frontend/package-lock.json
 
-  docker:
-    name: Docker build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - name: Build image
-        run: docker build -t helios_nano .
-      - name: Image boots (doctor — RPC + Gateway API reachable)
-        # Fresh wallet has no balance (WARN, not FAIL); doctor should still
-        # report READY because the hard deps (RPC, Gateway API) are green.
-        run: docker run --rm helios_nano npm run agent -- doctor
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
 
-  smoke:
-    name: End-to-end smoke (live)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Run smoke test (requires funded AGENT_PRIVATE_KEY secret)
-        env:
-          PRIVATE_KEY: ${{ secrets.AGENT_PRIVATE_KEY }}
-        run: |
-          if [ -z "$PRIVATE_KEY" ]; then
-            echo "::notice::AGENT_PRIVATE_KEY secret not set — skipping live smoke test."
-            echo "Add a funded Arc-Testnet key as the AGENT_PRIVATE_KEY repo secret to enable it."
-            exit 0
-          fi
-          npm run agent:smoke
+      - name: Generate Prisma client
+        working-directory: frontend
+        run: npx prisma generate
+
+      - name: Type check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
