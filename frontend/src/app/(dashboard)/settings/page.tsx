@@ -279,7 +279,6 @@ export default function SettingsPage() {
         <div className="space-y-4">
           {[
             { label: "Network", value: `${status.data.chainName} (Chain ${status.data.chainId})` },
-            { label: "Seller Address", value: status.data.seller },
             { label: "Default Currency", value: "USDC (Native)" },
             { label: "Settlement Protocol", value: "x402" },
             { label: "Gateway", value: "Circle Gateway (gas-free)" },

@@ -32,7 +32,7 @@ export default function ApiCostsPage() {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
   const [showAddService, setShowAddService] = useState(false);
-  const [newService, setNewService] = useState({ name: "", provider: "", monthlyBudget: "" });
+  const [newService, setNewService] = useState({ name: "", provider: "", dailyBudget: "" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -53,12 +53,12 @@ export default function ApiCostsPage() {
         body: JSON.stringify({
           name: newService.name,
           provider: newService.provider,
-          monthlyBudget: parseFloat(newService.monthlyBudget) || 0,
+          dailyBudget: parseFloat(newService.dailyBudget) || 0,
         }),
       });
       if (res.ok) {
         setShowAddService(false);
-        setNewService({ name: "", provider: "", monthlyBudget: "" });
+        setNewService({ name: "", provider: "", dailyBudget: "" });
         const r = await fetch(`/api/api-costs?days=${days}`);
         if (r.ok) setData(await r.json());
       }
@@ -292,7 +292,7 @@ export default function ApiCostsPage() {
                       </div>
                     </td>
                     <td className="py-3 pr-4 text-muted">{svc.provider}</td>
-                    <td className="py-3 pr-4 text-foreground">{svc.monthlyBudget > 0 ? formatCurrency(svc.monthlyBudget) : "—"}</td>
+                    <td className="py-3 pr-4 text-foreground">{svc.dailyBudget > 0 ? formatCurrency(svc.dailyBudget) : "—"}</td>
                     <td className="py-3 pr-4">
                       <span className={cn(
                         "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
@@ -392,11 +392,11 @@ export default function ApiCostsPage() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-muted block mb-1">Monthly Budget (USD)</label>
+                <label className="text-xs text-muted block mb-1">Daily Budget (USD)</label>
                 <input
                   type="number"
-                  value={newService.monthlyBudget}
-                  onChange={(e) => setNewService({ ...newService, monthlyBudget: e.target.value })}
+                  value={newService.dailyBudget}
+                  onChange={(e) => setNewService({ ...newService, dailyBudget: e.target.value })}
                   placeholder="0.00"
                   className="w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-dark focus:outline-none focus:ring-1 focus:ring-primary"
                 />

@@ -167,7 +167,7 @@ describe('apiServiceCreateSchema', () => {
   });
 
   it('accepts service with budget', () => {
-    const result = apiServiceCreateSchema.safeParse({ name: 'GPT-4', provider: 'OpenAI', monthlyBudget: 100 });
+    const result = apiServiceCreateSchema.safeParse({ name: 'GPT-4', provider: 'OpenAI', dailyBudget: 100 });
     expect(result.success).toBe(true);
   });
 

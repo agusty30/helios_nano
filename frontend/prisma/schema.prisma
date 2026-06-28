@@ -397,7 +397,7 @@ model ApiService {
   name            String
   provider        String
   apiKeyEncrypted String?
-  monthlyBudget   Float    @default(0)
+  dailyBudget     Float    @default(0)
   status          String   @default("active")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

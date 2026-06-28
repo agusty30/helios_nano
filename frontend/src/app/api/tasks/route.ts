@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
             const totalCost = svc.usages.reduce((sum, u) => sum + u.cost, 0);
             if (totalCost === 0 && svc.usages.length === 0) {
               recommendations.push(`${svc.name}: No usage recorded — consider removing or verify integration`);
-            } else if (svc.monthlyBudget > 0 && totalCost > svc.monthlyBudget * 0.8) {
-              recommendations.push(`${svc.name}: Approaching budget limit (${((totalCost / svc.monthlyBudget) * 100).toFixed(0)}% used)`);
+            } else if (svc.dailyBudget > 0 && totalCost > svc.dailyBudget * 0.8) {
+              recommendations.push(`${svc.name}: Approaching budget limit (${((totalCost / svc.dailyBudget) * 100).toFixed(0)}% used)`);
             }
           }
           if (recommendations.length === 0) recommendations.push("All services are within budget — route 80% of requests to cheap tier for additional savings");
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
         }
 
         case "list_services": {
-          const svcs = await prisma.apiService.findMany({ where: { orgId: user.orgId }, select: { name: true, provider: true, status: true, monthlyBudget: true } });
+          const svcs = await prisma.apiService.findMany({ where: { orgId: user.orgId }, select: { name: true, provider: true, status: true, dailyBudget: true } });
           steps.push({ step: 2, action: "list_services", status: "completed", detail: svcs.map(s => `${s.name} (${s.provider})`).join(", ") || "No services" });
           result = { services: svcs.length, list: svcs };
           break;

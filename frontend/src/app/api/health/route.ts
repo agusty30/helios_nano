@@ -362,7 +362,7 @@ CREATE TABLE "ApiService" (
     "name" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
     "apiKeyEncrypted" TEXT,
-    "monthlyBudget" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "dailyBudget" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "status" TEXT NOT NULL DEFAULT 'active',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -439,6 +439,7 @@ ALTER TABLE "User" ALTER COLUMN "passwordHash" DROP NOT NULL;
 ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "txHash" TEXT;
 ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "fromWalletId" TEXT;
 ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "toWalletId" TEXT;
+ALTER TABLE "ApiService" RENAME COLUMN "monthlyBudget" TO "dailyBudget";
 `;
 
 export async function POST() {

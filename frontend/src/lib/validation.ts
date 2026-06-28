@@ -68,7 +68,7 @@ export const apiServiceCreateSchema = z.object({
   vendorId: z.string().optional(),
   name: z.string().min(1).max(200),
   provider: z.string().min(1).max(100),
-  monthlyBudget: z.number().min(0).optional(),
+  dailyBudget: z.number().min(0).optional(),
 });
 
 export const apiUsageCreateSchema = z.object({

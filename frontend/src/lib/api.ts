@@ -98,7 +98,7 @@ export const api = {
 
   // API Services
   listApiServices: () => get<{ services: ApiServiceRecord[] }>("/api/api-services"),
-  createApiService: (data: { name: string; provider: string; vendorId?: string; monthlyBudget?: number }) =>
+  createApiService: (data: { name: string; provider: string; vendorId?: string; dailyBudget?: number }) =>
     post<{ service: ApiServiceRecord }>("/api/api-services", data),
 
   // API Costs

@@ -288,7 +288,7 @@ export interface ApiServiceRecord {
   id: string;
   name: string;
   provider: string;
-  monthlyBudget: number;
+  dailyBudget: number;
   status: string;
   createdAt: string;
   vendor?: { id: string; name: string; logo: string | null } | null;
