@@ -326,7 +326,7 @@ export default function WalletsPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className="glass-bright rounded-xl p-5 hover:border-primary/20 transition-colors"
+              className="group glass-bright rounded-xl p-5 hover:border-primary/20 transition-colors"
             >
               <div className="flex items-center gap-3 mb-3">
                 <div className={cn(
