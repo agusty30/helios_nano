@@ -36,7 +36,7 @@ export async function GET(
       const data = await response.json();
       if (data.result) {
         const rawBalance = BigInt(data.result);
-        const balance = Number(rawBalance) / 1e6;
+        const balance = Number(rawBalance) / 1e18;
         return NextResponse.json({ walletId: id, address: wallet.address, balance, chain: wallet.chain });
       }
 
