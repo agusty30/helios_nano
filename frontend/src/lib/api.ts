@@ -3,6 +3,7 @@ import type {
   ApiStatus, BudgetStateResponse, BudgetOptimizeResponse,
   PaidServiceResponse, CanvasMetrics, AgentRouteResponse, TransferResponse,
   OrganizationRecord, WalletRecord, TaskRecord, AuditLogEntry, PaymentPolicyRecord,
+  VendorRecord, ApiServiceRecord, ApiCostsResponse,
 } from "./types";
 
 async function get<T>(url: string): Promise<T | null> {
@@ -80,4 +81,19 @@ export const api = {
   listWallets: () => get<{ wallets: WalletRecord[] }>("/api/wallets"),
   createWallet: (data: { label: string; address: string; type: string }) =>
     post<{ wallet: WalletRecord }>("/api/wallets", data),
+
+  // Vendors
+  listVendors: () => get<{ vendors: VendorRecord[] }>("/api/vendors"),
+  createVendor: (data: { name: string; category?: string; website?: string; contactEmail?: string }) =>
+    post<{ vendor: VendorRecord }>("/api/vendors", data),
+
+  // API Services
+  listApiServices: () => get<{ services: ApiServiceRecord[] }>("/api/api-services"),
+  createApiService: (data: { name: string; provider: string; vendorId?: string; monthlyBudget?: number }) =>
+    post<{ service: ApiServiceRecord }>("/api/api-services", data),
+
+  // API Costs
+  getApiCosts: (days = 30) => get<ApiCostsResponse>(`/api/api-costs?days=${days}`),
+  recordApiUsage: (data: { serviceId: string; date: string; requests: number; tokens?: number; cost: number; model?: string }) =>
+    post<{ usage: unknown }>("/api/api-costs", data),
 };

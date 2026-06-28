@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Crosshair, Bot, CreditCard, ShoppingCart, Landmark, Wallet,
   ArrowRightLeft, CheckCircle2, PieChart, BarChart3, FileText, Settings, Hexagon,
-  LogOut, User,
+  LogOut, User, Receipt,
 } from "lucide-react";
 
 const nav = [
@@ -22,6 +22,7 @@ const nav = [
   { label: "Transactions", href: "/transactions", icon: ArrowRightLeft },
   { label: "Approvals", href: "/approvals", icon: CheckCircle2 },
   { label: "Wallets", href: "/wallets", icon: Wallet },
+  { label: "API Costs", href: "/api-costs", icon: Receipt },
   { label: "Budgets", href: "/budgets", icon: PieChart },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
   { label: "Reports", href: "/reports", icon: FileText },

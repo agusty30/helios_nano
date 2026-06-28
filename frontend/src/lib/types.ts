@@ -243,3 +243,44 @@ export interface PaymentPolicyRecord {
   agentLimit: number;
   require2fa: boolean;
 }
+
+export interface VendorRecord {
+  id: string;
+  name: string;
+  category: string;
+  website: string | null;
+  contactEmail: string | null;
+  logo: string | null;
+  status: string;
+  createdAt: string;
+  _count?: { subscriptions: number; apiServices: number };
+}
+
+export interface ApiServiceRecord {
+  id: string;
+  name: string;
+  provider: string;
+  monthlyBudget: number;
+  status: string;
+  createdAt: string;
+  vendor?: { id: string; name: string; logo: string | null } | null;
+  _count?: { usages: number };
+}
+
+export interface ApiCostSummary {
+  totalCost: number;
+  totalRequests: number;
+  totalTokens: number;
+  dailyAvg: number;
+  projectedMonthly: number;
+  days: number;
+}
+
+export interface ApiCostsResponse {
+  summary: ApiCostSummary;
+  byProvider: Record<string, { cost: number; requests: number; tokens: number }>;
+  dailyCosts: Record<string, number>;
+  services: ApiServiceRecord[];
+  vendors: VendorRecord[];
+  alerts: Array<{ id: string; name: string; limit: number; spent: number; pct: number; triggered: boolean }>;
+}
