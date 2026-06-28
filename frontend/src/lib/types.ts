@@ -93,7 +93,6 @@ export interface ApiStatus {
   network: string;
   chainId: number;
   chainName: string;
-  prices: { nano: string; helloWorld: string };
   endpoints: string[];
   explorer: string;
   time: string;

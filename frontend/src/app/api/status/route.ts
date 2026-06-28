@@ -11,7 +11,6 @@ export async function GET() {
     chainId: 5042002,
     chainName: "Arc Testnet",
     rpc: ARC_TESTNET_RPC,
-    prices: { nano: "$0.000001", helloWorld: "$0.01" },
     endpoints: ["/nano", "/hello-world"],
     explorer: "https://testnet.arcscan.app",
     time: new Date().toISOString(),

@@ -13,7 +13,7 @@ import {
 
 const MOCK_STATUS: ApiStatus = {
   seller: "0x933a...9682", network: "eip155:5042002", chainId: 5042002,
-  chainName: "Arc Testnet", prices: { nano: "$0.000001", helloWorld: "$0.01" },
+  chainName: "Arc Testnet",
   endpoints: ["/nano", "/hello-world"], explorer: "https://testnet.arcscan.app",
   time: new Date().toISOString(),
 };
@@ -282,8 +282,6 @@ export default function SettingsPage() {
             { label: "Default Currency", value: "USDC (Native)" },
             { label: "Settlement Protocol", value: "x402" },
             { label: "Gateway", value: "Circle Gateway (gas-free)" },
-            { label: "Nano Price", value: status.data.prices.nano },
-            { label: "Hello World Price", value: status.data.prices.helloWorld },
             { label: "Explorer", value: status.data.explorer },
           ].map((field) => (
             <div key={field.label} className="flex items-center justify-between">
