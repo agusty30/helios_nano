@@ -52,6 +52,12 @@ model Organization {
   settings        Setting[]
   approvals       Approval[]
   reports         Report[]
+  vendors         Vendor[]
+  subscriptions   Subscription[]
+  apiServices     ApiService[]
+  apiUsages       ApiUsage[]
+  budgetRules     BudgetRule[]
+  notifications   Notification[]
 }
 
 // --- Auth Models (NextAuth.js + custom) ---
@@ -333,4 +339,114 @@ model Report {
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@index([orgId, createdAt])
+}
+
+// --- API Cost Management ---
+
+model Vendor {
+  id           String   @id @default(cuid())
+  orgId        String
+  name         String
+  category     String   @default("API")
+  website      String?
+  contactEmail String?
+  logo         String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org           Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+  apiServices   ApiService[]
+
+  @@index([orgId])
+}
+
+model Subscription {
+  id              String    @id @default(cuid())
+  orgId           String
+  vendorId        String?
+  name            String
+  plan            String    @default("free")
+  monthlyRate     Float     @default(0)
+  billingCycle    String    @default("monthly")
+  status          String    @default("active")
+  nextBillingDate DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  vendor Vendor?      @relation(fields: [vendorId], references: [id])
+
+  @@index([orgId])
+}
+
+model ApiService {
+  id              String   @id @default(cuid())
+  orgId           String
+  vendorId        String?
+  name            String
+  provider        String
+  apiKeyEncrypted String?
+  monthlyBudget   Float    @default(0)
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  vendor   Vendor?      @relation(fields: [vendorId], references: [id])
+  usages   ApiUsage[]
+
+  @@index([orgId])
+}
+
+model ApiUsage {
+  id        String   @id @default(cuid())
+  serviceId String
+  orgId     String
+  date      DateTime
+  requests  Int      @default(0)
+  tokens    Int      @default(0)
+  cost      Float    @default(0)
+  model     String?
+  createdAt DateTime @default(now())
+
+  service ApiService   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId, date])
+  @@index([orgId, date])
+}
+
+model BudgetRule {
+  id             String   @id @default(cuid())
+  orgId          String
+  name           String
+  type           String   @default("monthly")
+  limit          Float
+  alertThreshold Float    @default(80)
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String?
+  type      String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, userId, read])
+  @@index([createdAt])
 }

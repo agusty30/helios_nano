@@ -1,46 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const PUBLIC = [
+const PUBLIC_PAGES = [
   "/", "/features", "/pricing", "/docs", "/about", "/contact",
   "/login", "/register", "/verify", "/forgot-password", "/reset-password",
 ];
 
-const AUTH_API = ["/api/auth"];
+const PUBLIC_API = [
+  "/api/auth",
+  "/api/health",
+  "/api/status",
+  "/api/ready",
+  "/api/metrics",
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    pathname.startsWith("/api/health") ||
-    AUTH_API.some((p) => pathname.startsWith(p))
-  ) {
+  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon")) {
     return NextResponse.next();
   }
 
-  if (PUBLIC.some((p) => p === "/" ? pathname === "/" : pathname === p || pathname.startsWith(p + "/"))) {
+  if (PUBLIC_API.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/api/")) {
+  if (PUBLIC_PAGES.some((p) => p === "/" ? pathname === "/" : pathname === p || pathname.startsWith(p + "/"))) {
     return NextResponse.next();
   }
 
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
   const token = await getToken({
     req: request,
-    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+    secret,
     secureCookie: request.nextUrl.protocol === "https:",
   });
 
   if (!token) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (!token.emailVerified && pathname !== "/verify") {
+  if (!token.emailVerified && pathname !== "/verify" && !pathname.startsWith("/api/")) {
     const verifyUrl = new URL("/verify", request.url);
     if (token.email) {
       verifyUrl.searchParams.set("email", token.email as string);

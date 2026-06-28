@@ -325,6 +325,107 @@ CREATE INDEX "Approval_status_idx" ON "Approval"("status");
 CREATE INDEX "Report_orgId_createdAt_idx" ON "Report"("orgId", "createdAt");
 ALTER TABLE "Approval" ADD CONSTRAINT "Approval_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
 ALTER TABLE "Report" ADD CONSTRAINT "Report_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
+
+CREATE TABLE "Vendor" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "category" TEXT NOT NULL DEFAULT 'API',
+    "website" TEXT,
+    "contactEmail" TEXT,
+    "logo" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "Vendor_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "Subscription" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "vendorId" TEXT,
+    "name" TEXT NOT NULL,
+    "plan" TEXT NOT NULL DEFAULT 'free',
+    "monthlyRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "billingCycle" TEXT NOT NULL DEFAULT 'monthly',
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "nextBillingDate" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "Subscription_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "ApiService" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "vendorId" TEXT,
+    "name" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "apiKeyEncrypted" TEXT,
+    "monthlyBudget" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "ApiService_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "ApiUsage" (
+    "id" TEXT NOT NULL,
+    "serviceId" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "date" TIMESTAMP(3) NOT NULL,
+    "requests" INTEGER NOT NULL DEFAULT 0,
+    "tokens" INTEGER NOT NULL DEFAULT 0,
+    "cost" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "model" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ApiUsage_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "BudgetRule" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'monthly',
+    "limit" DOUBLE PRECISION NOT NULL,
+    "alertThreshold" DOUBLE PRECISION NOT NULL DEFAULT 80,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "BudgetRule_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "Notification" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "userId" TEXT,
+    "type" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "read" BOOLEAN NOT NULL DEFAULT false,
+    "data" JSONB NOT NULL DEFAULT '{}',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
+);
+
+CREATE INDEX "Vendor_orgId_idx" ON "Vendor"("orgId");
+CREATE INDEX "Subscription_orgId_idx" ON "Subscription"("orgId");
+CREATE INDEX "ApiService_orgId_idx" ON "ApiService"("orgId");
+CREATE INDEX "ApiUsage_serviceId_date_idx" ON "ApiUsage"("serviceId", "date");
+CREATE INDEX "ApiUsage_orgId_date_idx" ON "ApiUsage"("orgId", "date");
+CREATE INDEX "BudgetRule_orgId_idx" ON "BudgetRule"("orgId");
+CREATE INDEX "Notification_orgId_userId_read_idx" ON "Notification"("orgId", "userId", "read");
+CREATE INDEX "Notification_createdAt_idx" ON "Notification"("createdAt");
+
+ALTER TABLE "Vendor" ADD CONSTRAINT "Vendor_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor"("id") ON DELETE SET NULL;
+ALTER TABLE "ApiService" ADD CONSTRAINT "ApiService_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
+ALTER TABLE "ApiService" ADD CONSTRAINT "ApiService_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor"("id") ON DELETE SET NULL;
+ALTER TABLE "ApiUsage" ADD CONSTRAINT "ApiUsage_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "ApiService"("id") ON DELETE CASCADE;
+ALTER TABLE "ApiUsage" ADD CONSTRAINT "ApiUsage_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
+ALTER TABLE "BudgetRule" ADD CONSTRAINT "BudgetRule_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
 `;
 
 const MIGRATE_SQL = `

@@ -1,25 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireAuth, requireRole, handleAuthError } from "@/lib/session";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const user = await getSession();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const user = await requireAuth();
 
-  const members = await prisma.user.findMany({
-    where: { orgId: user.orgId },
-    select: { id: true, name: true, email: true, role: true, createdAt: true },
-    orderBy: { createdAt: "asc" },
-  });
+    const members = await prisma.user.findMany({
+      where: { orgId: user.orgId },
+      select: { id: true, name: true, email: true, role: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
 
-  return NextResponse.json({ members });
+    return NextResponse.json({ members });
+  } catch (err) { return handleAuthError(err); }
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getSession();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (user.role !== "ADMIN") return NextResponse.json({ error: "Admin required" }, { status: 403 });
+  try {
+    const user = await requireRole("ADMIN");
 
   const body = await request.json();
   const { name, email, password, role } = body;
@@ -51,12 +51,12 @@ export async function POST(request: NextRequest) {
   });
 
   return NextResponse.json({ member }, { status: 201 });
+  } catch (err) { return handleAuthError(err); }
 }
 
 export async function DELETE(request: NextRequest) {
-  const user = await getSession();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (user.role !== "ADMIN") return NextResponse.json({ error: "Admin required" }, { status: 403 });
+  try {
+    const user = await requireRole("ADMIN");
 
   const { searchParams } = new URL(request.url);
   const memberId = searchParams.get("id");
@@ -80,4 +80,5 @@ export async function DELETE(request: NextRequest) {
   });
 
   return NextResponse.json({ ok: true });
+  } catch (err) { return handleAuthError(err); }
 }
