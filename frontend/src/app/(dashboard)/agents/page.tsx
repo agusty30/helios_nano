@@ -30,6 +30,8 @@ interface DbAgent {
   status: string;
   config: { icon?: string; description?: string };
   createdAt: string;
+  _count?: { tasks: number };
+  wallet?: { label: string; address: string } | null;
 }
 
 export default function AgentsPage() {
@@ -171,10 +173,16 @@ export default function AgentsPage() {
                   <span className={cn("text-sm font-semibold capitalize", isActive ? "text-success" : "text-muted-dark")}>{agent.status}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-muted-dark block mb-0.5">Created</span>
-                  <span className="text-sm font-semibold text-foreground">{new Date(agent.createdAt).toLocaleDateString()}</span>
+                  <span className="text-[10px] text-muted-dark block mb-0.5">Tasks</span>
+                  <span className="text-sm font-semibold text-foreground">{agent._count?.tasks || 0}</span>
                 </div>
               </div>
+              {agent.wallet && (
+                <div className="mt-3 pt-3 border-t border-border">
+                  <span className="text-[10px] text-muted-dark block mb-0.5">Wallet</span>
+                  <span className="text-[11px] font-mono text-muted">{agent.wallet.label} · {agent.wallet.address.slice(0, 6)}...{agent.wallet.address.slice(-4)}</span>
+                </div>
+              )}
             </motion.div>
           );
         })}

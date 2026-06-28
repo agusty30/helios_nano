@@ -85,14 +85,19 @@ export default function MissionControlPage() {
   const metrics = useApi(fetchMetrics, MOCK_CANVAS, 10000);
 
   useEffect(() => {
-    fetch("/api/tasks?limit=20")
-      .then((r) => (r.ok ? r.json() : { tasks: [] }))
-      .then((data) => setTasks(data.tasks || []))
-      .catch(() => {});
+    const loadTasks = () => {
+      fetch("/api/tasks?limit=20")
+        .then((r) => (r.ok ? r.json() : { tasks: [] }))
+        .then((data) => setTasks(data.tasks || []))
+        .catch(() => {});
+    };
+    loadTasks();
     fetch("/api/agents")
       .then((r) => (r.ok ? r.json() : { agents: [] }))
       .then((data) => setDbAgents(data.agents || []))
       .catch(() => {});
+    const interval = setInterval(loadTasks, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleSubmit = async () => {
@@ -204,7 +209,7 @@ export default function MissionControlPage() {
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
           {(mode === "task"
-            ? ["Run tests", "Check status", "Optimize costs", "Allocate budget $10"]
+            ? ["Run tests", "Check status", "Show API costs", "List agents", "Optimize costs", "Create vendor OpenAI", "Generate report"]
             : commandSuggestions
           ).map((s) => (
             <button
