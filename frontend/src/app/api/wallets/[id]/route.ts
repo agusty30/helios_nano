@@ -63,8 +63,8 @@ export async function DELETE(
 ) {
   const user = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (user.role !== "ADMIN" && user.role !== "FINANCE") {
-    return NextResponse.json({ error: "Admin or Finance role required" }, { status: 403 });
+  if (user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
   }
 
   const { id } = await params;

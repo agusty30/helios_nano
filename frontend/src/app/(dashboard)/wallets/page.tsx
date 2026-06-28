@@ -376,15 +376,24 @@ export default function WalletsPage() {
                     {wallet.type}
                   </span>
                 </div>
-                <div className="text-right">
-                  {balances[wallet.id]?.loading ? (
-                    <Loader2 size={14} className="text-muted-dark animate-spin" />
-                  ) : (
-                    <span className="text-sm font-bold text-foreground">
-                      {(balances[wallet.id]?.balance || 0).toFixed(4)}
-                    </span>
-                  )}
-                  <span className="text-[9px] text-muted-dark block">USDC</span>
+                <div className="text-right flex items-start gap-2">
+                  <div>
+                    {balances[wallet.id]?.loading ? (
+                      <Loader2 size={14} className="text-muted-dark animate-spin" />
+                    ) : (
+                      <span className="text-sm font-bold text-foreground">
+                        {(balances[wallet.id]?.balance || 0).toFixed(4)}
+                      </span>
+                    )}
+                    <span className="text-[9px] text-muted-dark block">USDC</span>
+                  </div>
+                  <button
+                    onClick={() => { setSelectedWallet(wallet); setModal("delete"); }}
+                    title="Delete wallet"
+                    className="p-1.5 rounded-lg text-muted-dark hover:text-danger hover:bg-danger/10 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
 
@@ -431,12 +440,6 @@ export default function WalletsPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-muted-dark hover:text-primary-light hover:bg-primary/5 rounded-lg transition-colors ml-auto"
                 >
                   <RefreshCw size={12} />
-                </button>
-                <button
-                  onClick={() => { setSelectedWallet(wallet); setModal("delete"); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-muted-dark hover:text-danger hover:bg-danger/5 rounded-lg transition-colors"
-                >
-                  <Trash2 size={12} />
                 </button>
               </div>
 
