@@ -530,7 +530,7 @@ export default function WalletsPage() {
                                 "p-3 rounded-xl border text-left transition-all",
                                 createForm.type === opt.value
                                   ? "border-primary bg-primary/15 ring-1 ring-primary/30"
-                                  : "border-white/10 bg-white/[0.06] hover:border-primary/40 hover:bg-primary/10"
+                                  : "border-white/10 bg-gray-700/50 hover:border-primary/40 hover:bg-gray-600/50"
                               )}
                             >
                               <opt.icon size={16} className={cn(
