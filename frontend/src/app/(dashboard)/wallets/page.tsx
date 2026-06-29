@@ -617,14 +617,31 @@ export default function WalletsPage() {
                     )}
                     <div>
                       <label className="text-[11px] text-muted-dark mb-1.5 block font-medium">Type</label>
-                      <select
-                        value={importForm.type}
-                        onChange={(e) => setImportForm({ ...importForm, type: e.target.value })}
-                        className="w-full bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-foreground focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all"
-                      >
-                        <option value="AGENT">Agent</option>
-                        <option value="TREASURY">Treasury</option>
-                      </select>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { value: "AGENT", icon: Bot, label: "Agent", desc: "Autonomous spending" },
+                          { value: "TREASURY", icon: Shield, label: "Treasury", desc: "Organization funds" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setImportForm({ ...importForm, type: opt.value })}
+                            className={cn(
+                              "p-3 rounded-xl border text-left transition-all",
+                              importForm.type === opt.value
+                                ? "border-primary bg-primary/15 ring-1 ring-primary/30"
+                                : "border-white/10 bg-gray-700/50 hover:border-primary/40 hover:bg-gray-600/50"
+                            )}
+                          >
+                            <opt.icon size={16} className={cn(
+                              "mb-1",
+                              opt.value === "TREASURY" ? "text-primary-light" : "text-success"
+                            )} />
+                            <span className="text-[13px] font-medium text-foreground block">{opt.label}</span>
+                            <span className="text-[10px] text-muted-dark">{opt.desc}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div className="p-3 rounded-xl bg-warning/5 border border-warning/20">
                       <div className="flex items-center gap-1.5 mb-1">

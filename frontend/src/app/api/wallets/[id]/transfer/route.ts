@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireRole, handleAuthError } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import crypto from "crypto";
+import { decryptPrivateKey } from "@/lib/crypto";
+
+const ARC_TESTNET_RPC =
+  "https://rpc.testnet.arc-node.thecanteenapp.com/v1/swrm_3aa8a9334770e6eddb5cc05f2e3dbfe555eca270d4eb78fbb4b6056a4a04e2b0";
 
 export async function POST(
   request: NextRequest,
@@ -33,8 +36,59 @@ export async function POST(
     if (fromWallet.id === toWallet.id) {
       return NextResponse.json({ error: "Cannot transfer to the same wallet" }, { status: 400 });
     }
+    if (!fromWallet.encryptedPrivateKey) {
+      return NextResponse.json({ error: "Source wallet has no private key — cannot sign transactions. Import a wallet with a private key first." }, { status: 400 });
+    }
 
-    const txHash = "0x" + crypto.randomBytes(32).toString("hex");
+    const { ethers } = await import("ethers");
+
+    let privateKey: string;
+    try {
+      privateKey = decryptPrivateKey(fromWallet.encryptedPrivateKey);
+    } catch {
+      return NextResponse.json({ error: "Failed to decrypt source wallet private key" }, { status: 500 });
+    }
+
+    const provider = new ethers.JsonRpcProvider(ARC_TESTNET_RPC, {
+      chainId: 5042002,
+      name: "arc-testnet",
+    });
+    const signer = new ethers.Wallet(privateKey, provider);
+
+    const amountWei = ethers.parseEther(String(amount));
+
+    let txHash: string;
+    try {
+      const tx = await signer.sendTransaction({
+        to: toWallet.address,
+        value: amountWei,
+      });
+      txHash = tx.hash;
+      await tx.wait(1);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      const transaction = await prisma.transaction.create({
+        data: {
+          orgId: user.orgId,
+          walletId: fromWalletId,
+          fromWalletId,
+          toWalletId,
+          type: "transfer",
+          amount,
+          status: "FAILED",
+          reference: note || `Transfer: ${fromWallet.label} → ${toWallet.label}`,
+          metadata: {
+            from: { id: fromWallet.id, label: fromWallet.label, address: fromWallet.address },
+            to: { id: toWallet.id, label: toWallet.label, address: toWallet.address },
+            error: message,
+          },
+        },
+      });
+      return NextResponse.json({
+        error: `On-chain transfer failed: ${message}`,
+        transaction,
+      }, { status: 502 });
+    }
 
     const transaction = await prisma.transaction.create({
       data: {
