@@ -529,8 +529,8 @@ export default function WalletsPage() {
                               className={cn(
                                 "p-3 rounded-xl border text-left transition-all",
                                 createForm.type === opt.value
-                                  ? "border-primary/50 bg-primary/5"
-                                  : "border-border hover:border-primary/20"
+                                  ? "border-primary bg-primary/15 ring-1 ring-primary/30"
+                                  : "border-white/10 bg-white/[0.06] hover:border-primary/40 hover:bg-primary/10"
                               )}
                             >
                               <opt.icon size={16} className={cn(
@@ -550,7 +550,7 @@ export default function WalletsPage() {
                           value={createForm.label}
                           onChange={(e) => setCreateForm({ ...createForm, label: e.target.value })}
                           required
-                          className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
+                          className="w-full bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all"
                           placeholder={createForm.type === "TREASURY" ? "Main Treasury" : "Payment Agent"}
                         />
                       </div>
@@ -581,7 +581,7 @@ export default function WalletsPage() {
                         value={importForm.label}
                         onChange={(e) => setImportForm({ ...importForm, label: e.target.value })}
                         required
-                        className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
+                        className="w-full bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all"
                         placeholder="My Wallet"
                       />
                     </div>
@@ -604,7 +604,7 @@ export default function WalletsPage() {
                           }
                         }}
                         required
-                        className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground font-mono placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
+                        className="w-full bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-foreground font-mono placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all"
                         placeholder="Enter 64-char hex private key"
                       />
                       <p className="text-[10px] text-muted-dark mt-1">Your key is encrypted with AES-256-GCM before storage</p>
@@ -620,7 +620,7 @@ export default function WalletsPage() {
                       <select
                         value={importForm.type}
                         onChange={(e) => setImportForm({ ...importForm, type: e.target.value })}
-                        className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground focus:outline-none focus:border-primary/50 transition-all"
+                        className="w-full bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-foreground focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all"
                       >
                         <option value="AGENT">Agent</option>
                         <option value="TREASURY">Treasury</option>
@@ -742,7 +742,7 @@ export default function WalletsPage() {
                           value={transferForm.toWalletId}
                           onChange={(e) => setTransferForm({ ...transferForm, toWalletId: e.target.value })}
                           required
-                          className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground focus:outline-none focus:border-primary/50 transition-all"
+                          className="w-full bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-foreground focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all"
                         >
                           <option value="">Select destination wallet</option>
                           {wallets.filter(w => w.id !== selectedWallet.id).map(w => (
@@ -762,7 +762,7 @@ export default function WalletsPage() {
                           value={transferForm.amount}
                           onChange={(e) => setTransferForm({ ...transferForm, amount: e.target.value })}
                           required
-                          className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
+                          className="w-full bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all"
                           placeholder="0.00"
                         />
                       </div>
@@ -773,7 +773,7 @@ export default function WalletsPage() {
                           type="text"
                           value={transferForm.note}
                           onChange={(e) => setTransferForm({ ...transferForm, note: e.target.value })}
-                          className="w-full bg-white/[0.03] border border-border rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 transition-all"
+                          className="w-full bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-foreground placeholder-muted-dark/50 focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all"
                           placeholder="Agent funding allocation"
                         />
                       </div>
