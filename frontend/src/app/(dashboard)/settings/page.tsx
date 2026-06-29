@@ -255,11 +255,20 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold text-foreground">Settings</h1>
           <p className="text-sm text-muted-dark mt-1">Organization configuration, policies, and API access</p>
         </div>
-        {status.isLive ? (
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-success"><Wifi size={12} /> Live</span>
-        ) : (
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Demo</span>
-        )}
+        <div className="flex items-center gap-3">
+          {status.isLive ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-success"><Wifi size={12} /> Live</span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Offline</span>
+          )}
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-success">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success" />
+            </span>
+            All Systems Operational
+          </span>
+        </div>
       </div>
 
       {/* Network Config — read-only */}

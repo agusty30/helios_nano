@@ -113,16 +113,6 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <LogOut size={14} className="text-muted-dark" />
           Sign Out
         </button>
-        <div className="glass rounded-lg px-3 py-2">
-          <div className="flex items-center gap-2 mb-0.5">
-            <div className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success" />
-            </div>
-            <span className="text-[10px] font-medium text-foreground">All Systems Operational</span>
-          </div>
-          <span className="text-[9px] text-muted-dark font-mono">Arc Testnet</span>
-        </div>
       </div>
     </aside>
   );

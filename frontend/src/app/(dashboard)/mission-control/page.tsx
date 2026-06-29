@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import type { CanvasMetrics, AgentRouteResponse, ExecutionLogRecord } from "@/lib/types";
 import {
   Send, Sparkles, CheckCircle2, Clock, Loader2, Bot, XCircle, XOctagon,
-  CreditCard, ShoppingCart, Landmark, Wallet, Wifi, WifiOff,
+  CreditCard, ShoppingCart, Landmark, Wallet,
   Play, ListChecks, ChevronDown, ChevronUp, Terminal,
   AlertTriangle, Info, AlertCircle, Database, Globe,
 } from "lucide-react";
@@ -176,11 +176,13 @@ export default function MissionControlPage() {
           <p className="text-sm text-muted-dark mt-1">Command your AI agents — natural language operations center</p>
         </div>
         <div className="flex items-center gap-2 text-[11px] font-medium">
-          {metrics.isLive ? (
-            <span className="flex items-center gap-1.5 text-success"><Wifi size={12} /> Live</span>
-          ) : (
-            <span className="flex items-center gap-1.5 text-muted-dark"><WifiOff size={12} /> Demo</span>
-          )}
+          <span className="flex items-center gap-1.5 text-success">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success" />
+            </span>
+            All Systems Operational
+          </span>
         </div>
       </div>
 
