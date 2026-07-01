@@ -8,7 +8,7 @@ import { useApi } from "@/lib/useApi";
 import type { ApiStatus } from "@/lib/types";
 import {
   Building2, Shield, Key, Bell, Globe, Users, Save, Check,
-  ExternalLink, Copy, Wifi, WifiOff, Plus, Trash2,
+  ExternalLink, Copy, Wifi, WifiOff, Plus, Trash2, Bot, Zap, Pencil,
 } from "lucide-react";
 
 const MOCK_STATUS: ApiStatus = {
@@ -100,6 +100,109 @@ export default function SettingsPage() {
   const [teamSaved, setTeamSaved] = useState(false);
   const [teamAdding, setTeamAdding] = useState(false);
   const [teamError, setTeamError] = useState("");
+
+  // --- AI Provider state ---
+  interface AiProviderItem {
+    id: string;
+    name: string;
+    slug: string;
+    baseUrl: string;
+    defaultModel: string;
+    status: string;
+    isDefault: boolean;
+    hasApiKey: boolean;
+  }
+  const [aiProviders, setAiProviders] = useState<AiProviderItem[]>([]);
+  const [showAddProvider, setShowAddProvider] = useState(false);
+  const [providerName, setProviderName] = useState("");
+  const [providerSlug, setProviderSlug] = useState("");
+  const [providerBaseUrl, setProviderBaseUrl] = useState("");
+  const [providerApiKey, setProviderApiKey] = useState("");
+  const [providerModel, setProviderModel] = useState("");
+  const [providerIsDefault, setProviderIsDefault] = useState(false);
+  const [providerAdding, setProviderAdding] = useState(false);
+  const [providerError, setProviderError] = useState("");
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+
+  const PROVIDER_PRESETS = [
+    { name: "Anthropic", slug: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
+    { name: "OpenAI", slug: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1" },
+    { name: "Google Gemini", slug: "google-gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-2.5-flash" },
+    { name: "OpenRouter", slug: "openrouter", baseUrl: "https://openrouter.ai/api/v1", model: "anthropic/claude-sonnet-4" },
+    { name: "Grok", slug: "grok", baseUrl: "https://api.x.ai/v1", model: "grok-3" },
+    { name: "DeepSeek", slug: "deepseek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+  ];
+
+  const loadProviders = () => {
+    fetch("/api/ai-providers")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.providers) setAiProviders(data.providers); })
+      .catch(() => {});
+  };
+
+  useEffect(() => { loadProviders(); }, []);
+
+  const applyPreset = (preset: typeof PROVIDER_PRESETS[0]) => {
+    setProviderName(preset.name);
+    setProviderSlug(preset.slug);
+    setProviderBaseUrl(preset.baseUrl);
+    setProviderModel(preset.model);
+  };
+
+  const addProvider = async () => {
+    if (!providerName.trim() || !providerBaseUrl.trim() || !providerModel.trim()) return;
+    setProviderAdding(true);
+    setProviderError("");
+    try {
+      const res = await fetch("/api/ai-providers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: providerName,
+          slug: providerSlug || providerName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          baseUrl: providerBaseUrl,
+          apiKey: providerApiKey || undefined,
+          defaultModel: providerModel,
+          isDefault: providerIsDefault,
+        }),
+      });
+      if (res.ok) {
+        setProviderName(""); setProviderSlug(""); setProviderBaseUrl("");
+        setProviderApiKey(""); setProviderModel(""); setProviderIsDefault(false);
+        setShowAddProvider(false);
+        loadProviders();
+      } else {
+        const err = await res.json();
+        setProviderError(err.error || "Failed to add provider");
+      }
+    } catch {
+      setProviderError("Network error");
+    }
+    setProviderAdding(false);
+  };
+
+  const deleteProvider = async (id: string) => {
+    try {
+      const res = await fetch(`/api/ai-providers/${id}`, { method: "DELETE" });
+      if (res.ok) loadProviders();
+    } catch {}
+  };
+
+  const testProvider = async (id: string) => {
+    setTestingProvider(id);
+    try {
+      const res = await fetch(`/api/ai-providers/${id}/test`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Connection successful! Latency: ${data.latencyMs}ms\nModels: ${(data.models || []).join(", ") || "N/A"}`);
+      } else {
+        alert(`Connection failed: ${data.error}`);
+      }
+    } catch {
+      alert("Test request failed");
+    }
+    setTestingProvider(null);
+  };
 
   // Load org settings from DB
   useEffect(() => {
@@ -625,6 +728,125 @@ export default function SettingsPage() {
         {teamSaved && (
           <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-success">
             <Check size={12} /> Team updated
+          </div>
+        )}
+      </motion.div>
+
+      {/* AI Providers */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="glass-bright rounded-xl p-6"
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Bot size={16} className="text-primary-light" />
+            </div>
+            <h3 className="text-[14px] font-semibold text-foreground">AI Providers</h3>
+          </div>
+          <button
+            onClick={() => setShowAddProvider(!showAddProvider)}
+            className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/80 transition-colors"
+          >
+            <Plus size={12} /> Add Provider
+          </button>
+        </div>
+
+        {aiProviders.length > 0 && (
+          <div className="space-y-3 mb-5">
+            {aiProviders.map((p) => (
+              <div key={p.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-border group">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[12px] font-semibold text-primary-light">
+                  {p.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-medium text-foreground">{p.name}</span>
+                    {p.isDefault && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary-light font-semibold">DEFAULT</span>}
+                    <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-semibold", p.status === "active" ? "bg-success/10 text-success" : "bg-warning/10 text-warning")}>{p.status.toUpperCase()}</span>
+                  </div>
+                  <span className="block text-[11px] text-muted-dark truncate">{p.baseUrl} · {p.defaultModel}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => testProvider(p.id)}
+                    disabled={testingProvider === p.id || !p.hasApiKey}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-primary-light hover:bg-primary/5 rounded-lg transition-colors disabled:opacity-30"
+                  >
+                    <Zap size={10} /> {testingProvider === p.id ? "Testing..." : "Test"}
+                  </button>
+                  <button
+                    onClick={() => deleteProvider(p.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-danger/10 text-muted-dark hover:text-danger transition-all"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {aiProviders.length === 0 && !showAddProvider && (
+          <p className="text-[12px] text-muted-dark mb-4">No AI providers configured. Add one to enable agent AI capabilities.</p>
+        )}
+
+        {showAddProvider && (
+          <div className="p-4 rounded-lg bg-white/[0.02] border border-border border-dashed">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] text-muted-dark">Add AI Provider</span>
+              <select
+                onChange={(e) => { const preset = PROVIDER_PRESETS.find(p => p.slug === e.target.value); if (preset) applyPreset(preset); }}
+                className="bg-bg border border-border rounded-lg px-2 py-1 text-[11px] text-foreground focus:outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer"
+                defaultValue=""
+              >
+                <option value="" disabled>Quick preset...</option>
+                {PROVIDER_PRESETS.map(p => <option key={p.slug} value={p.slug}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] text-muted-dark mb-1 block">Provider Name</label>
+                <input type="text" placeholder="e.g. Anthropic" value={providerName} onChange={(e) => { setProviderName(e.target.value); if (!providerSlug) setProviderSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-")); }}
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[12px] text-foreground placeholder-muted-dark focus:outline-none focus:border-primary/50 transition-colors" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-dark mb-1 block">Slug</label>
+                <input type="text" placeholder="anthropic" value={providerSlug} onChange={(e) => setProviderSlug(e.target.value)}
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[12px] text-foreground placeholder-muted-dark focus:outline-none focus:border-primary/50 transition-colors font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-dark mb-1 block">Base URL</label>
+                <input type="url" placeholder="https://api.anthropic.com" value={providerBaseUrl} onChange={(e) => setProviderBaseUrl(e.target.value)}
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[12px] text-foreground placeholder-muted-dark focus:outline-none focus:border-primary/50 transition-colors font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-dark mb-1 block">Default Model</label>
+                <input type="text" placeholder="claude-sonnet-4-20250514" value={providerModel} onChange={(e) => setProviderModel(e.target.value)}
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[12px] text-foreground placeholder-muted-dark focus:outline-none focus:border-primary/50 transition-colors font-mono" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-[10px] text-muted-dark mb-1 block">API Key (encrypted at rest)</label>
+                <input type="password" placeholder="sk-ant-..." value={providerApiKey} onChange={(e) => setProviderApiKey(e.target.value)}
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[12px] text-foreground placeholder-muted-dark focus:outline-none focus:border-primary/50 transition-colors font-mono" />
+              </div>
+              <div className="sm:col-span-2 flex items-center justify-between">
+                <label className="flex items-center gap-2 text-[12px] text-muted cursor-pointer">
+                  <input type="checkbox" checked={providerIsDefault} onChange={(e) => setProviderIsDefault(e.target.checked)} className="rounded" />
+                  Set as default provider
+                </label>
+                <button
+                  onClick={addProvider}
+                  disabled={!providerName.trim() || !providerBaseUrl.trim() || !providerModel.trim() || providerAdding}
+                  className="flex items-center gap-1.5 text-[11px] font-medium px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Plus size={12} /> {providerAdding ? "Adding..." : "Add Provider"}
+                </button>
+              </div>
+            </div>
+            {providerError && <p className="text-[11px] text-danger mt-2">{providerError}</p>}
           </div>
         )}
       </motion.div>

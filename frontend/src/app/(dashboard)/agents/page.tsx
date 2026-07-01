@@ -12,6 +12,7 @@ import {
   CreditCard, ShoppingCart, Landmark, Wallet, Bot, Globe, FileText, Sparkles, Bell,
   Activity, CheckCircle2, TrendingUp, Zap, Wifi, WifiOff,
   Pause, Play, RotateCcw, XOctagon, ChevronDown, ChevronUp, Clock, XCircle,
+  Shield, Save, Check,
 } from "lucide-react";
 
 const iconMap: Record<string, React.FC<{ size?: number; className?: string }>> = {
@@ -34,7 +35,7 @@ interface DbAgent {
   healthScore: number;
   lastActivityAt: string | null;
   lastError: string | null;
-  config: { icon?: string; description?: string };
+  config: { icon?: string; description?: string; aiProviderId?: string; aiModel?: string };
   createdAt: string;
   _count?: { tasks: number };
   wallet?: { label: string; address: string } | null;
@@ -49,12 +50,24 @@ interface AgentMetricSummary {
   avgDuration: number;
 }
 
+interface AiProviderOption {
+  id: string;
+  name: string;
+  defaultModel: string;
+  status: string;
+  isDefault: boolean;
+}
+
 export default function AgentsPage() {
   const [dbAgents, setDbAgents] = useState<DbAgent[]>([]);
   const [dbLoaded, setDbLoaded] = useState(false);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [agentMetrics, setAgentMetrics] = useState<Record<string, AgentMetricSummary>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [provisioning, setProvisioning] = useState(false);
+  const [aiProviders, setAiProviders] = useState<AiProviderOption[]>([]);
+  const [aiConfigSaving, setAiConfigSaving] = useState<string | null>(null);
+  const [aiConfigEdits, setAiConfigEdits] = useState<Record<string, { providerId: string; model: string }>>({});
   const { toast } = useToast();
 
   const loadAgents = useCallback(() => {
@@ -70,6 +83,13 @@ export default function AgentsPage() {
   }, [toast]);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
+
+  useEffect(() => {
+    fetch("/api/ai-providers")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.providers) setAiProviders(data.providers); })
+      .catch(() => {});
+  }, []);
 
   const fetchMetrics = useCallback(() => api.fetchCanvasMetrics(), []);
   const metrics = useApi(fetchMetrics, MOCK_CANVAS, 10000);
@@ -110,8 +130,67 @@ export default function AgentsPage() {
     setActionLoading(null);
   };
 
+  const provisionWallets = async () => {
+    setProvisioning(true);
+    try {
+      const res = await fetch("/api/agents/provision-wallets", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        const count = data.provisioned?.length || 0;
+        toast(`${count} agent wallet${count !== 1 ? "s" : ""} provisioned`, "success");
+        loadAgents();
+      } else {
+        toast(data.error || "Failed to provision wallets", "error");
+      }
+    } catch {
+      toast("Failed to provision wallets", "error");
+    }
+    setProvisioning(false);
+  };
+
+  const getAiConfigEdit = (agent: DbAgent) => {
+    const edit = aiConfigEdits[agent.id];
+    if (edit) return edit;
+    const cfg = agent.config || {};
+    return { providerId: cfg.aiProviderId || "", model: cfg.aiModel || "" };
+  };
+
+  const setAiConfigEdit = (agentId: string, field: "providerId" | "model", value: string) => {
+    setAiConfigEdits(prev => {
+      const current = prev[agentId] || { providerId: "", model: "" };
+      return { ...prev, [agentId]: { ...current, [field]: value } };
+    });
+  };
+
+  const saveAiConfig = async (agent: DbAgent) => {
+    const edit = getAiConfigEdit(agent);
+    setAiConfigSaving(agent.id);
+    try {
+      const newConfig = {
+        ...(agent.config || {}),
+        aiProviderId: edit.providerId || undefined,
+        aiModel: edit.model || undefined,
+      };
+      const res = await fetch(`/api/agents/${agent.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: newConfig }),
+      });
+      const data = await res.json();
+      if (data.agent) {
+        setDbAgents(prev => prev.map(a => a.id === agent.id ? { ...a, config: data.agent.config } : a));
+        setAiConfigEdits(prev => { const next = { ...prev }; delete next[agent.id]; return next; });
+        toast("AI configuration saved", "success");
+      }
+    } catch {
+      toast("Failed to save AI config", "error");
+    }
+    setAiConfigSaving(null);
+  };
+
   const activeCount = dbAgents.filter(a => a.status === "active").length;
   const totalCount = dbAgents.length;
+  const unprovisioned = dbAgents.filter(a => !a.wallet).length;
 
   return (
     <div className="space-y-6">
@@ -120,11 +199,22 @@ export default function AgentsPage() {
           <h1 className="text-2xl font-bold text-foreground">AI Agents</h1>
           <p className="text-sm text-muted-dark mt-1">Monitor and manage your autonomous financial agents</p>
         </div>
-        {dbLoaded || metrics.isLive ? (
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-success"><Wifi size={12} /> Live</span>
-        ) : (
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Loading...</span>
-        )}
+        <div className="flex items-center gap-3">
+          {unprovisioned > 0 && (
+            <button
+              onClick={provisionWallets}
+              disabled={provisioning}
+              className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/80 transition-colors disabled:opacity-50"
+            >
+              <Shield size={12} /> {provisioning ? "Provisioning..." : `Provision ${unprovisioned} Wallet${unprovisioned !== 1 ? "s" : ""}`}
+            </button>
+          )}
+          {dbLoaded || metrics.isLive ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-success"><Wifi size={12} /> Live</span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-dark"><WifiOff size={12} /> Loading...</span>
+          )}
+        </div>
       </div>
 
       {metrics.isLive && (
@@ -173,11 +263,13 @@ export default function AgentsPage() {
         ) : dbAgents.length === 0 ? (
           <div className="col-span-2 text-center py-12 text-[13px] text-muted-dark">No agents configured. Visit the dashboard to seed default agents.</div>
         ) : dbAgents.map((agent, i) => {
-          const cfg = (agent.config || {}) as { icon?: string; description?: string };
+          const cfg = (agent.config || {}) as { icon?: string; description?: string; aiProviderId?: string; aiModel?: string };
           const Icon = iconMap[cfg.icon || ""] || Bot;
           const isActive = agent.status === "active";
           const isExpanded = expandedAgent === agent.id;
           const mets = agentMetrics[agent.id];
+          const aiEdit = getAiConfigEdit(agent);
+          const selectedProvider = aiProviders.find(p => p.id === aiEdit.providerId);
 
           return (
             <motion.div
@@ -215,7 +307,6 @@ export default function AgentsPage() {
                     </div>
                   </div>
 
-                  {/* Health score gauge */}
                   <div className="text-right">
                     <div className={cn(
                       "text-lg font-bold",
@@ -244,7 +335,6 @@ export default function AgentsPage() {
                   </div>
                 </div>
 
-                {/* Action buttons */}
                 <div className="flex items-center gap-2 pt-3 border-t border-border">
                   {isActive ? (
                     <button
@@ -288,10 +378,8 @@ export default function AgentsPage() {
                 </div>
               </div>
 
-              {/* Expanded details */}
               {isExpanded && (
                 <div className="px-6 pb-6 border-t border-border/50">
-                  {/* Metrics summary */}
                   {mets && (
                     <div className="mt-4 grid grid-cols-4 gap-3">
                       <div className="p-2 rounded-lg bg-white/[0.02] border border-border text-center">
@@ -313,7 +401,6 @@ export default function AgentsPage() {
                     </div>
                   )}
 
-                  {/* Wallet info */}
                   {agent.wallet && (
                     <div className="mt-4 p-3 rounded-lg bg-white/[0.02] border border-border">
                       <span className="text-[10px] text-muted-dark block mb-1">Assigned Wallet</span>
@@ -321,7 +408,62 @@ export default function AgentsPage() {
                     </div>
                   )}
 
-                  {/* Last error */}
+                  {/* AI Configuration */}
+                  <div className="mt-4 p-4 rounded-lg bg-white/[0.02] border border-border">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Sparkles size={12} className="text-primary-light" />
+                      <span className="text-[11px] font-semibold text-foreground">AI Configuration</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-muted-dark mb-1 block">AI Provider</label>
+                        <select
+                          value={aiEdit.providerId}
+                          onChange={(e) => {
+                            setAiConfigEdit(agent.id, "providerId", e.target.value);
+                            const prov = aiProviders.find(p => p.id === e.target.value);
+                            if (prov && !aiEdit.model) setAiConfigEdit(agent.id, "model", prov.defaultModel);
+                          }}
+                          className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[12px] text-foreground focus:outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer"
+                        >
+                          <option value="">None</option>
+                          {aiProviders.filter(p => p.status === "active").map(p => (
+                            <option key={p.id} value={p.id}>{p.name}{p.isDefault ? " (default)" : ""}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-dark mb-1 block">Model Override</label>
+                        <input
+                          type="text"
+                          value={aiEdit.model}
+                          onChange={(e) => setAiConfigEdit(agent.id, "model", e.target.value)}
+                          placeholder={selectedProvider?.defaultModel || "Select a provider first"}
+                          className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[12px] text-foreground placeholder-muted-dark focus:outline-none focus:border-primary/50 transition-colors font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-3">
+                      <span className="text-[10px] text-muted-dark">
+                        {selectedProvider ? `Using: ${aiEdit.model || selectedProvider.defaultModel} via ${selectedProvider.name}` : "No AI provider selected"}
+                      </span>
+                      <button
+                        onClick={() => saveAiConfig(agent)}
+                        disabled={aiConfigSaving === agent.id}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-lg transition-colors",
+                          aiConfigSaving === agent.id ? "opacity-50" : "bg-primary text-white hover:bg-primary/80"
+                        )}
+                      >
+                        {aiConfigSaving === agent.id ? (
+                          <><Clock size={10} /> Saving...</>
+                        ) : (
+                          <><Save size={10} /> Save</>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
                   {agent.lastError && (
                     <div className="mt-4 p-3 rounded-lg bg-danger/5 border border-danger/20">
                       <div className="flex items-center gap-1.5 mb-1">

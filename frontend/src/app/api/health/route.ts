@@ -502,6 +502,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS "KpiSnapshot_orgId_period_periodStart_key" ON 
 CREATE INDEX IF NOT EXISTS "KpiSnapshot_orgId_periodStart_idx" ON "KpiSnapshot"("orgId", "periodStart");
 ALTER TABLE "KpiSnapshot" DROP CONSTRAINT IF EXISTS "KpiSnapshot_orgId_fkey";
 ALTER TABLE "KpiSnapshot" ADD CONSTRAINT "KpiSnapshot_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
+CREATE TABLE IF NOT EXISTS "AiProvider" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "baseUrl" TEXT NOT NULL,
+    "apiKeyEncrypted" TEXT,
+    "defaultModel" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AiProvider_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "AiProvider_orgId_slug_key" ON "AiProvider"("orgId", "slug");
+CREATE INDEX IF NOT EXISTS "AiProvider_orgId_idx" ON "AiProvider"("orgId");
+ALTER TABLE "AiProvider" DROP CONSTRAINT IF EXISTS "AiProvider_orgId_fkey";
+ALTER TABLE "AiProvider" ADD CONSTRAINT "AiProvider_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE;
 `;
 
 export async function POST() {

@@ -27,6 +27,11 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
       take: limit,
       skip: offset,
+      include: {
+        wallet: { select: { label: true, address: true } },
+        fromWallet: { select: { label: true, address: true } },
+        toWallet: { select: { label: true, address: true } },
+      },
     }),
     prisma.transaction.count({ where }),
   ]);
