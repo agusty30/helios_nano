@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireAuth, requireRole, handleAuthError } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { Wallet } from "ethers";
+import { encryptPrivateKey } from "@/lib/crypto";
 import crypto from "crypto";
+
+const TX_TYPE_AGENT_MAP: Record<string, string> = {
+  payment: "Payment Agent",
+  api_cost: "API Cost Agent",
+  subscription: "Procurement Agent",
+};
 
 function cid() {
   return `cl${crypto.randomBytes(12).toString("base64url")}`;
@@ -308,6 +316,34 @@ export async function POST() {
     summary.agentMetrics = DEFAULT_AGENTS.length * 7;
     addStep("Initialize Agents", `Created ${DEFAULT_AGENTS.length} agents + ${DEFAULT_AGENTS.length * 7} daily metric records`, t);
 
+    // Provision wallets for each agent
+    t = stepStart();
+    const agentWallets: Record<string, string> = {};
+
+    for (const a of DEFAULT_AGENTS) {
+      const ethWallet = Wallet.createRandom();
+      const encrypted = encryptPrivateKey(ethWallet.privateKey);
+
+      const wallet = await prisma.wallet.create({
+        data: {
+          orgId,
+          label: `${a.name} Wallet`,
+          address: ethWallet.address,
+          type: "AGENT",
+          encryptedPrivateKey: encrypted,
+        },
+      });
+
+      await prisma.agent.update({
+        where: { id: agentIds[a.name] },
+        data: { walletId: wallet.id },
+      });
+
+      agentWallets[a.name] = wallet.id;
+    }
+    summary.agentWallets = DEFAULT_AGENTS.length;
+    addStep("Provision Agent Wallets", `Created ${DEFAULT_AGENTS.length} agent wallets with encrypted keys`, t);
+
     // =====================
     // STEP 6 — TEST SCENARIOS
     // =====================
@@ -377,26 +413,56 @@ export async function POST() {
     const wallets = await prisma.wallet.findMany({ where: { orgId, deletedAt: null }, select: { id: true, label: true, address: true, type: true } });
     const treasuryWallet = wallets.find(w => w.type === "TREASURY") || wallets[0];
 
+    // Treasury → agent funding transactions
+    const fundingTxData = [];
+    for (const a of DEFAULT_AGENTS) {
+      const agentWalletId = agentWallets[a.name];
+      if (agentWalletId && treasuryWallet) {
+        fundingTxData.push({
+          orgId,
+          walletId: treasuryWallet.id,
+          fromWalletId: treasuryWallet.id,
+          toWalletId: agentWalletId,
+          type: "funding",
+          amount: parseFloat(rand(1.0, 10.0).toFixed(6)),
+          currency: "USDC",
+          status: "COMPLETED" as const,
+          reference: `funding:${a.name.toLowerCase().replace(/\s+/g, "-")}`,
+          txHash: `0x${crypto.randomBytes(32).toString("hex")}`,
+          metadata: { agent: a.name, purpose: "Agent wallet funding" },
+          createdAt: daysAgo(randInt(7, 14)),
+        });
+      }
+    }
+    if (fundingTxData.length > 0) {
+      await prisma.transaction.createMany({ data: fundingTxData });
+    }
+
+    // Agent payment transactions (agents pay from their own wallets)
     const txData = [];
     for (let i = 0; i < 30; i++) {
       const status = pick(["COMPLETED", "COMPLETED", "COMPLETED", "COMPLETED", "PENDING", "FAILED"]) as "COMPLETED" | "PENDING" | "FAILED";
       const vendor = pick(VENDORS);
+      const txType = pick(["payment", "payment", "payment", "api_cost", "subscription"]);
+      const agentName = TX_TYPE_AGENT_MAP[txType] || "Payment Agent";
+      const agentWalletId = agentWallets[agentName] || null;
       txData.push({
         orgId,
-        walletId: treasuryWallet?.id,
-        type: pick(["payment", "payment", "payment", "api_cost", "subscription"]),
+        walletId: agentWalletId,
+        fromWalletId: agentWalletId,
+        type: txType,
         amount: parseFloat(rand(0.001, 5.0).toFixed(6)),
         currency: "USDC",
         status,
         reference: `${vendor.category.toLowerCase()}:${vendor.name.toLowerCase().replace(/\s+/g, "-")}`,
         txHash: status === "COMPLETED" ? `0x${crypto.randomBytes(32).toString("hex")}` : null,
-        metadata: { vendor: vendor.name, department: pick(DEPARTMENTS), category: vendor.category },
+        metadata: { vendor: vendor.name, department: pick(DEPARTMENTS), category: vendor.category, agent: agentName },
         createdAt: daysAgo(randInt(0, 14)),
       });
     }
     await prisma.transaction.createMany({ data: txData });
-    summary.transactions = txData.length;
-    addStep("Payment Transactions", `Created ${txData.length} transactions (${txData.filter(t => t.status === "COMPLETED").length} completed)`, t);
+    summary.transactions = txData.length + fundingTxData.length;
+    addStep("Payment Transactions", `Created ${fundingTxData.length} funding + ${txData.length} agent payment transactions`, t);
 
     // =====================
     // STEP 7 — MISSION CONTROL TASKS

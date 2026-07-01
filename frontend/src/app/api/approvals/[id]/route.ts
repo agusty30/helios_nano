@@ -42,6 +42,11 @@ export async function PUT(
   });
 
   if (status === "approved") {
+    const paymentAgent = await prisma.agent.findFirst({
+      where: { orgId: user.orgId, name: "Payment Agent", walletId: { not: null } },
+      select: { walletId: true },
+    });
+
     await prisma.transaction.create({
       data: {
         orgId: user.orgId,
@@ -49,6 +54,8 @@ export async function PUT(
         amount: approval.amount,
         status: "COMPLETED",
         reference: `approval:${approval.id}`,
+        walletId: paymentAgent?.walletId || null,
+        fromWalletId: paymentAgent?.walletId || null,
         metadata: { vendor: approval.vendor, department: approval.department },
       },
     });

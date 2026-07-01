@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { Wallet } from "ethers";
+import { encryptPrivateKey } from "@/lib/crypto";
 
 const SELLER = "0x933a2405f84c224be1ef373ba16e992e1f459682";
 
@@ -44,6 +46,30 @@ export async function POST() {
       data: DEFAULT_AGENTS.map(a => ({ ...a, orgId: user.orgId })),
     });
     seeded.push(`${DEFAULT_AGENTS.length} agents`);
+
+    // Provision wallets for each agent
+    const agents = await prisma.agent.findMany({
+      where: { orgId: user.orgId },
+      select: { id: true, name: true },
+    });
+    for (const agent of agents) {
+      const ethWallet = Wallet.createRandom();
+      const encrypted = encryptPrivateKey(ethWallet.privateKey);
+      const wallet = await prisma.wallet.create({
+        data: {
+          orgId: user.orgId,
+          label: `${agent.name} Wallet`,
+          address: ethWallet.address,
+          type: "AGENT",
+          encryptedPrivateKey: encrypted,
+        },
+      });
+      await prisma.agent.update({
+        where: { id: agent.id },
+        data: { walletId: wallet.id },
+      });
+    }
+    seeded.push(`${agents.length} agent wallets`);
   }
 
   const walletCount = await prisma.wallet.count({ where: { orgId: user.orgId } });
@@ -69,8 +95,19 @@ export async function POST() {
 
   const txCount = await prisma.transaction.count({ where: { orgId: user.orgId } });
   if (txCount === 0) {
+    const paymentAgent = await prisma.agent.findFirst({
+      where: { orgId: user.orgId, name: "Payment Agent", walletId: { not: null } },
+      select: { walletId: true },
+    });
+    const agentWalletId = paymentAgent?.walletId || null;
+
     await prisma.transaction.createMany({
-      data: SAMPLE_TRANSACTIONS.map(t => ({ ...t, orgId: user.orgId })),
+      data: SAMPLE_TRANSACTIONS.map(t => ({
+        ...t,
+        orgId: user.orgId,
+        walletId: agentWalletId,
+        fromWalletId: agentWalletId,
+      })),
     });
     seeded.push(`${SAMPLE_TRANSACTIONS.length} transactions`);
   }
